@@ -46,39 +46,65 @@ class AgentController:
         if not user_input:
             return
 
-        # 2. Obter ou Criar Conversa e Selecionar Provedor
+        # 2. Obter ou Criar Conversa
         try:
-            self.active_provider = await ProviderFactory.get_active_provider()
             conversation_id = await MessageRepository.get_or_create_conversation(user_id)
+            available_providers = await ProviderFactory.get_all_available_providers()
+            if not available_providers:
+                raise Exception("Nenhum provedor configurado ou disponível momento.")
         except Exception as e:
-            logging.error(f"Erro de Provedor/DB: {e}")
+            logging.error(f"Erro de Inicialização: {e}")
             await message.reply(f"❌ Erro Crítico: {e}")
             return
 
         # 3. Router de Skill (Passo Zero - Simplificado)
-        # Por enquanto, injetamos todas as skills disponíveis ou um prompt básico
-        # No futuro, o SkillRouter filtrará aqui
         system_prompt = "Você é o QAgent, um assistente de QA e Automação."
         all_skills = self.skill_loader.skills
         if all_skills:
             skills_context = "\n".join([f"- {s['name']}: {s['description']}" for s in all_skills])
             system_prompt += f"\nVocê tem acesso às seguintes habilidades:\n{skills_context}"
 
-        # 4. Iniciar Engine de Raciocínio (Agent Loop)
-        loop = AgentLoop(conversation_id, self.active_provider)
+        # 4. Loop de Fallback por Provedores
+        response = None
+        last_error = None
         
-        # 5. Gerar Resposta
-        try:
-            # Sinalizar ao usuário que o Agente está pensando
-            from core.bot import bot
-            from aiogram.utils.chat_action import ChatActionSender
-            
-            async with ChatActionSender.typing(chat_id=message.chat.id, bot=bot):
-                response = await loop.run(user_input, system_prompt)
-            
-            # 6. Enviar Resposta Final via OutputHandler
-            await TelegramOutputHandler.send_response(message.chat.id, response, requires_audio=requires_audio)
-            
-        except Exception as e:
-            logging.error(f"Erro no Agent Loop: {e}")
-            await message.reply(f"⚠️ Ocorreu um erro no processamento: {e}")
+        for provider in available_providers:
+            try:
+                self.active_provider = provider
+                # Iniciar Engine de Raciocínio (Agent Loop)
+                loop = AgentLoop(conversation_id, self.active_provider)
+                
+                # Sinalizar ao usuário que o Agente está pensando
+                from core.bot import bot
+                from aiogram.utils.chat_action import ChatActionSender
+                
+                async with ChatActionSender.typing(chat_id=message.chat.id, bot=bot):
+                    # Log Detalhado: Pergunta e Modelo
+                    logging.info(f"\n--- ENTRADA DO AGENTE ---")
+                    logging.info(f"Pergunta: {user_input}")
+                    logging.info(f"Provedor: {provider.name}")
+                    logging.info(f"Modelo: {provider.model_name}")
+                    
+                    response = await loop.run(user_input, system_prompt)
+                    
+                    # Log Detalhado: Resposta
+                    logging.info(f"Resposta Gerada: {response[:200]}...")
+                    logging.info(f"--------------------------\n")
+                
+                # Se chegamos aqui sem erro, interrompemos o loop de fallback
+                break
+                
+            except Exception as e:
+                logging.warning(f"Falha no provedor {provider.name}: {e}. Tentando próximo...")
+                last_error = e
+                continue
+
+        # 5. Enviar Resposta Final ou Erro de Esgotamento
+        if response:
+            try:
+                await TelegramOutputHandler.send_response(message.chat.id, response, requires_audio=requires_audio)
+            except Exception as e:
+                logging.error(f"Erro ao enviar resposta: {e}")
+        else:
+            logging.error(f"Todos os provedores falharam: {last_error}")
+            await message.reply(f"⚠️ Todos os provedores de IA falharam. Último erro: {last_error}")
