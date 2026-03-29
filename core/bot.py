@@ -30,6 +30,17 @@ async def handle_all_messages(message: types.Message):
     
     await controller.handle_message(message)
 
+@router.callback_query()
+async def process_callback(callback_query: types.CallbackQuery):
+    """Gerencia cliques em botões inline."""
+    global controller
+    if not controller:
+        from core.controller import AgentController
+        controller = AgentController()
+        await controller.initialize()
+    
+    await controller.handle_callback(callback_query)
+
 def setup_middlewares(dp: Dispatcher):
     # Middlewares de segurança e log podem ser injetados aqui
     dp.include_router(router)

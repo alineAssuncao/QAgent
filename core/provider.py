@@ -3,8 +3,10 @@ import httpx
 from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional
 from core.config import settings
+from core.middleware import provider_health
 from google import genai
 from openai import AsyncOpenAI
+
 
 class BaseProvider(ABC):
     def __init__(self, name: str, model_name: str):
@@ -19,9 +21,10 @@ class BaseProvider(ABC):
     async def is_available(self) -> bool:
         pass
 
+
 class LMStudioProvider(BaseProvider):
-    def __init__(self, base_url: str):
-        super().__init__("LM Studio (Local)", "local-model")
+    def __init__(self, base_url: str, model_name: str):
+        super().__init__("LM Studio (Local)", model_name)
         self.client = AsyncOpenAI(base_url=base_url, api_key="lm-studio")
         self.base_url = base_url
 
@@ -32,7 +35,7 @@ class LMStudioProvider(BaseProvider):
                 if response.status_code != 200:
                     return False
                 data = response.json()
-                # LM Studio retorna uma lista de modelos no campo 'data'. 
+                # LM Studio retorna uma lista de modelos no campo 'data'.
                 # Se estiver vazio, não há modelo carregado apesar do servidor estar ON.
                 return len(data.get("data", [])) > 0
         except Exception:
@@ -40,10 +43,10 @@ class LMStudioProvider(BaseProvider):
 
     async def generate_response(self, messages: List[Dict[str, str]]) -> str:
         response = await self.client.chat.completions.create(
-            model=self.model_name,
-            messages=messages
+            model=self.model_name, messages=messages
         )
         return response.choices[0].message.content
+
 
 class GeminiProvider(BaseProvider):
     def __init__(self, api_key: str):
@@ -57,13 +60,13 @@ class GeminiProvider(BaseProvider):
     async def generate_response(self, messages: List[Dict[str, str]]) -> str:
         # Convertendo mensagens para o formato do novo SDK (google-genai)
         # O Prompt final é a última mensagem do role 'user'
-        prompt = messages[-1]['content']
+        prompt = messages[-1]["content"]
         # O SDK v1+ gerencia o chat ou chamadas de modelo únicas
         response = await self.client.aio.models.generate_content(
-            model=self.model_name,
-            contents=prompt
+            model=self.model_name, contents=prompt
         )
         return response.text
+
 
 class OpenAICompatibleProvider(BaseProvider):
     def __init__(self, api_key: str, base_url: str = None, name: str = "OpenAI"):
@@ -77,10 +80,10 @@ class OpenAICompatibleProvider(BaseProvider):
 
     async def generate_response(self, messages: List[Dict[str, str]]) -> str:
         response = await self.client.chat.completions.create(
-            model=self.model_name,
-            messages=messages
+            model=self.model_name, messages=messages
         )
         return response.choices[0].message.content
+
 
 class ProviderFactory:
     @staticmethod
@@ -88,31 +91,46 @@ class ProviderFactory:
         providers = []
 
         # 1. LM Studio (Prioridade Local)
-        lm_studio = LMStudioProvider(settings.LM_STUDIO_BASE_URL)
-        if await lm_studio.is_available():
+        lm_studio_model = (
+            settings.LM_STUDIO_MODELS.split(",")[0].strip()
+            if settings.LM_STUDIO_MODELS
+            else "local-model"
+        )
+        lm_studio = LMStudioProvider(settings.LM_STUDIO_BASE_URL, lm_studio_model)
+        if await lm_studio.is_available() and provider_health.is_healthy("LM Studio"):
             providers.append(lm_studio)
+        else:
+            provider_health.mark_unhealthy("LM Studio")
 
         # 2. Gemini
         if settings.GEMINI_API_KEY:
             gemini = GeminiProvider(settings.GEMINI_API_KEY)
-            if await gemini.is_available():
+            if await gemini.is_available() and provider_health.is_healthy(
+                "Google Gemini"
+            ):
                 providers.append(gemini)
+            else:
+                provider_health.mark_unhealthy("Google Gemini")
 
         # 3. DeepSeek
         if settings.DEEPSEEK_API_KEY:
             deepseek = OpenAICompatibleProvider(
-                api_key=settings.DEEPSEEK_API_KEY, 
-                base_url="https://api.deepseek.com", 
-                name="DeepSeek"
+                api_key=settings.DEEPSEEK_API_KEY,
+                base_url="https://api.deepseek.com",
+                name="DeepSeek",
             )
-            if await deepseek.is_available():
+            if await deepseek.is_available() and provider_health.is_healthy("DeepSeek"):
                 providers.append(deepseek)
+            else:
+                provider_health.mark_unhealthy("DeepSeek")
 
         # 4. OpenAI
         if settings.OPENAI_API_KEY:
             openai = OpenAICompatibleProvider(api_key=settings.OPENAI_API_KEY)
-            if await openai.is_available():
+            if await openai.is_available() and provider_health.is_healthy("OpenAI"):
                 providers.append(openai)
+            else:
+                provider_health.mark_unhealthy("OpenAI")
 
         return providers
 

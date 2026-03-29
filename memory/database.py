@@ -46,6 +46,25 @@ class Database:
                 FOREIGN KEY (conversation_id) REFERENCES conversations (id)
             )
         """)
+
+        # Tabela de Tarefas (Fila e Status)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS tasks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                conversation_id TEXT,
+                status TEXT NOT NULL DEFAULT 'pending', -- 'pending', 'running', 'completed', 'cancelled'
+                input_text TEXT NOT NULL,
+                tasks_planned TEXT, -- Resumo do que será feito
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        
+        # Migração simples: Adicionar coluna se não existir (para evitar erros em bases já criadas)
+        try:
+            await db.execute("ALTER TABLE tasks ADD COLUMN tasks_planned TEXT")
+        except:
+            pass
         
         await db.commit()
         logging.info("Banco de Dados inicializado e tabelas verificadas.")

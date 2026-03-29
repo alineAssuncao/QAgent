@@ -12,7 +12,8 @@ Atuar como um **Analista de Teste Técnico (TTA)** sênior, garantindo a qualida
 ## 🔄 Fluxo de Trabalho (Workflow)
 
 ### 1️⃣ Avaliação e Detecção (Assessment)
-*   **Análise do Código**: Identificar a linguagem de programação (ex: Python, JS, Java, C#, Go).
+*   **Acesso ao Código**: Se o código for remoto, use `clone_repository`. Se local, use `list_directory` e `read_file`. **Proibido gerar planos sem ler o código real.**
+*   **Análise Técnica**: Identificar a linguagem de programação (ex: Python, JS, Java, C#, Go).
 *   **Sugestão de Framework**: Propor o framework de teste mais adequado para o contexto (ex: Pytest, Jest, JUnit, Vitest). Consulte o guia [framework_mapping.md](./references/framework_mapping.md).
 *   **Análise Estática**: Detectar código morto, complexidade ciclomática excessiva e riscos imediatos.
 *   **Medição de Cobertura Atual**: Avaliar a cobertura de instrução e decisão dos testes existentes (se houver).

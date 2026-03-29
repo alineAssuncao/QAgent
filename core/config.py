@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     BASE_DIR: Path = Path(__file__).resolve().parent.parent
     DATABASE_PATH: str = str(BASE_DIR / "data" / "qagent.db")
     SKILLS_DIR: str = str(BASE_DIR / "agents" / "skills")
+    PROJECTS_DIR: str = str(BASE_DIR / "projects")
     TMP_DIR: str = str(BASE_DIR / "tmp")
     LOG_LEVEL: str = "INFO"
 
