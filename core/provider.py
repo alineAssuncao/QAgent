@@ -96,8 +96,11 @@ class ProviderFactory:
             if settings.LM_STUDIO_MODELS
             else "local-model"
         )
+        logging.info("settings.LM_STUDIO_BASE_URL", settings.LM_STUDIO_BASE_URL)
+        logging.info("lm_studio_model", lm_studio_model)
         lm_studio = LMStudioProvider(settings.LM_STUDIO_BASE_URL, lm_studio_model)
         if await lm_studio.is_available() and provider_health.is_healthy("LM Studio"):
+            logging.info("API LLM IS AVAIABLE!!", )
             providers.append(lm_studio)
         else:
             provider_health.mark_unhealthy("LM Studio")

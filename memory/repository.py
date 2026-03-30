@@ -1,6 +1,6 @@
 import logging
 import uuid
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 from memory.database import Database
 
 class MessageRepository:
