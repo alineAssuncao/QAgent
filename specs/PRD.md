@@ -69,7 +69,7 @@ O usuário solicita a criação ou execução de uma suíte de testes pelo Teleg
 |----|-----------|-----------|-------------------|
 | RF-01 | Rodar via loop assíncrono utilizando **aiogram**. | Must | O sistema responde a mensagens via Telegram em tempo real. |
 | RF-02 | Validar Whitelist contra `TELEGRAM_ALLOWED_USER_IDS`. | Must | Usuários não autorizados são ignorados imediatamente. |
-| RF-03 | Alternar Provedores de LLM via `ProviderFactory`. | Must | Configuração simples via `.env` alterna o modelo de IA. |
+| RF-03 | Alternar Provedores de LLM via `ProviderFactory`. | Must | Configuração simples via `.env` alterna o modelo de IA. O provedor só é carregado se suas respectivas credenciais ou modelos (`_MODELS` ou `_API_KEY`) estiverem definidos. |
 
 ---
 
