@@ -18,21 +18,44 @@ from handlers.output import TelegramOutputHandler
 from aiogram import types
 
 
-class TesteUnitarioEstado(Enum):
+class TesteEstado(Enum):
     ANALISE = "analise"
     AGUARDANDO_CONFIRMACAO = "aguardando_confirmacao"
     EXECUTANDO = "executando"
     FINALIZADO = "finalizado"
 
 
-class UnitTestContext:
+# Mapeamento de palavras-chave para tipo de teste
+TEST_TYPE_KEYWORDS = {
+    "unitario": ["unit[aáàã]rio", "unitário", "unit test"],
+    "integracao": ["integra[cç][aã]o", "integration test", "testar m[oó]dulos"],
+    "api": ["testar api", "endpoint", "rest", "graphql", "contract"],
+    "frontend": ["frontend", "componente", "react test", "vue test", "playwright", "cypress", "testar ui"],
+    "analise": ["analisar c[oó]digo", "code review", "qualidade", "code smell", "complexidade"],
+    "relatorio": ["relat[oó]rio", "dashboard", "m[eé]tricas", "cobertura"],
+    "refatorar": ["refatorar", "testabilidade", "refactoring", "desacoplar"],
+    "cicd": ["pipeline", "ci/cd", "github actions", "gitlab ci"],
+    "documentar": ["documentar teste", "plano de teste", "test plan", "bdd", "gherkin", "rastreabilidade"],
+}
+
+# Keywords genéricos que ativam o QA Maestro (qualquer tipo de teste)
+QA_KEYWORDS = [
+    r"teste", r"test", r"testar", r"cobertura", r"coverage",
+    r"qualidade", r"quality", r"automa[cç][aã]o",
+    r"analisar", r"relat[oó]rio", r"refatorar", r"pipeline",
+    r"documentar", r"plano de teste",
+]
+
+
+class QATestContext:
     def __init__(self):
-        self.estado: TesteUnitarioEstado = TesteUnitarioEstado.ANALISE
+        self.estado: TesteEstado = TesteEstado.ANALISE
         self.user_id: int = 0
         self.chat_id: int = 0
         self.repo_name: str = ""
         self.repo_path: str = ""
         self.git_url: Optional[str] = None
+        self.test_type: str = "unitario"  # tipo de teste detectado
         self.cobertura_inicial: str = "0%"
         self.cobertura_final: str = "0%"
         self.frameworks: str = ""
@@ -48,7 +71,7 @@ class AgentController:
         self.skill_loader = SkillLoader(skills_dir=settings.SKILLS_DIR)
         self.active_provider: Optional[BaseProvider] = None
         self.running_tasks: Dict[int, asyncio.Task] = {}
-        self.contextos: Dict[int, UnitTestContext] = {}
+        self.contextos: Dict[int, QATestContext] = {}
 
     async def initialize(self):
         await Database.init_db()
@@ -88,7 +111,7 @@ class AgentController:
 
         if user_id in self.contextos:
             contexto = self.contextos[user_id]
-            if contexto.estado == TesteUnitarioEstado.AGUARDANDO_CONFIRMACAO:
+            if contexto.estado == TesteEstado.AGUARDANDO_CONFIRMACAO:
                 if user_input.lower() in [
                     "sim",
                     "sim, pode",
@@ -115,7 +138,14 @@ class AgentController:
                 del self.contextos[user_id]
             return
 
-        has_keyword = re.search(r"teste unit[aáàã]rio", lower_input)
+        # Detectar tipo de teste solicitado
+        test_type = self._detectar_tipo_teste(lower_input)
+        
+        # Verificar se há alguma keyword de QA na mensagem
+        has_qa_keyword = any(
+            re.search(kw, lower_input) for kw in QA_KEYWORDS
+        )
+        
         git_match = re.search(r"(https?://\S+\.git)", user_input)
 
         local_path_match = re.search(
@@ -127,21 +157,33 @@ class AgentController:
             os.path.join(settings.PROJECTS_DIR, local_path)
         )
 
-        if not has_keyword:
-            await message.reply("Inclua **'Teste Unitário'** na mensagem.")
+        if not has_qa_keyword and not git_match:
+            await message.reply(
+                "🤖 Sou o **QAgent** — especialista em automação de testes!\n\n"
+                "Inclua na mensagem o **tipo de teste** + **link .git** ou **nome do projeto**.\n\n"
+                "📋 **Tipos de teste suportados:**\n"
+                "• Teste Unitário\n"
+                "• Teste de Integração\n"
+                "• Teste de API\n"
+                "• Teste de Frontend\n"
+                "• Análise de Código\n"
+                "• Refatoração\n"
+                "• Relatório de Cobertura\n"
+                "• Pipeline CI/CD\n"
+                "• Documentação de Testes"
+            )
             return
 
         if git_match:
             git_url = git_match.group(1)
-            await self._iniciar_fluxo_teste_unitario(
-                message, git_url=git_url, local_path=None, requires_audio=requires_audio
+            await self._iniciar_fluxo_qa(
+                message, git_url=git_url, local_path=None,
+                requires_audio=requires_audio, test_type=test_type
             )
         elif has_local_path:
-            await self._iniciar_fluxo_teste_unitario(
-                message,
-                git_url=None,
-                local_path=local_path,
-                requires_audio=requires_audio,
+            await self._iniciar_fluxo_qa(
+                message, git_url=None, local_path=local_path,
+                requires_audio=requires_audio, test_type=test_type
             )
         else:
             await message.reply(
@@ -149,21 +191,30 @@ class AgentController:
                 "Ou envie um **link .git** para clonar."
             )
 
-    async def _iniciar_fluxo_teste_unitario(
+    def _detectar_tipo_teste(self, lower_input: str) -> str:
+        """Detecta o tipo de teste solicitado baseado em keywords."""
+        for test_type, patterns in TEST_TYPE_KEYWORDS.items():
+            for pattern in patterns:
+                if re.search(pattern, lower_input):
+                    return test_type
+        return "unitario"  # padrão: teste unitário
+
+    async def _iniciar_fluxo_qa(
         self,
         message: types.Message,
         git_url: str | None,
         local_path: str | None,
         requires_audio: bool,
+        test_type: str = "unitario",
     ):
         user_id = message.from_user.id
         chat_id = message.chat.id
-        task_input = git_url if git_url else local_path
 
-        contexto = UnitTestContext()
+        contexto = QATestContext()
         contexto.user_id = user_id
         contexto.chat_id = chat_id
         contexto.git_url = git_url
+        contexto.test_type = test_type
         contexto.start_time = datetime.now()
         self.contextos[user_id] = contexto
 
@@ -289,7 +340,7 @@ class AgentController:
 
         await TelegramOutputHandler.send_response(contexto.chat_id, relatorio)
 
-        contexto.estado = TesteUnitarioEstado.AGUARDANDO_CONFIRMACAO
+        contexto.estado = TesteEstado.AGUARDANDO_CONFIRMACAO
 
     def _extrair_cobertura(self, output_testes: str) -> str:
         padroes_cobertura = [
@@ -376,7 +427,7 @@ class AgentController:
         if not contexto:
             return
 
-        contexto.estado = TesteUnitarioEstado.EXECUTANDO
+        contexto.estado = TesteEstado.EXECUTANDO
         contexto.erro_encontrado = False
 
         await TelegramOutputHandler.send_response(
@@ -571,7 +622,7 @@ Frameworks detectados:
 
         await TelegramOutputHandler.send_response(contexto.chat_id, relatorio)
 
-        contexto.estado = TesteUnitarioEstado.FINALIZADO
+        contexto.estado = TesteEstado.FINALIZADO
 
     async def _cancelar_execucao(self, user_id: int, message: types.Message):
         if user_id in self.contextos:
