@@ -72,7 +72,7 @@ class OllamaProvider(BaseProvider):
 
 class GeminiProvider(BaseProvider):
     def __init__(self, api_key: str):
-        super().__init__("Google Gemini", "gemini-2.5-pro")
+        super().__init__("Google Gemini", "gemini-2.5-flash")
         self.client = genai.Client(api_key=api_key)
         self.api_key = api_key
 
