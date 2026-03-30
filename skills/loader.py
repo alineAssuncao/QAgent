@@ -2,7 +2,7 @@ import os
 import yaml
 import logging
 import re
-from typing import List, Dict, Optional
+from typing import List, Dict, Optional, Any
 
 class SkillLoader:
     def __init__(self, skills_dir: str = "./agents/skills"):

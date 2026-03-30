@@ -31,7 +31,7 @@ O QAgent responde a comandos de controle mesmo enquanto está processando uma ta
 
 - **Linguagem:** Python 3.11+
 - **Bot Framework:** [aiogram](https://docs.aiogram.dev/)
-- **IA/LLMs:** Gemini, DeepSeek, e modelos locais via LM Studio
+- **IA/LLMs:** Gemini, DeepSeek, e modelos locais via LM Studio e Ollama
 - **Processamento de Áudio:** Faster-Whisper (STT) e Edge-TTS (TTS)
 - **Banco de Dados:** SQLite (persistência local)
 

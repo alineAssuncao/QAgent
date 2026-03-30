@@ -26,7 +26,7 @@ Usuários frequentemente alimentam o agente com especificações em PDF ou envia
 ## 3. Goals (Objetivos)
 
 - [ ] G-01: Receber mensagens de texto (`message:text`) e encaminhar ao Pipeline AI.
-- [ ] G-02: Receber envios de documentos (`.pdf`, `.md`) e extrair o conteúdo textual via **PyMuPDF**.
+- [ ] G-02: Receber envios de documentos (`.pdf`, `.md`, `.py`) e extrair o conteúdo textual via **PyMuPDF**, ou copiar scripts locais.
 - [ ] G-03: Receber mensagens de voz e áudio, realizando a transcrição via **Whisper Local**.
 - [ ] G-04: Notificar o usuário com status em tempo real ("Digitando...", "Analisando documento...").
 
@@ -39,7 +39,7 @@ Usuários frequentemente alimentam o agente com especificações em PDF ou envia
 | ID | Requisito | Prioridade | Critério de Aceite |
 |----|-----------|-----------|-------------------|
 | RF-01 | **Whitelist**: Filtrar mensagens contra `TELEGRAM_ALLOWED_USER_IDS`. | Must | Acesso restrito apenas a usuários autorizados. |
-| RF-02 | **Parse de Documento**: Extrair texto de PDFs e Markdown. | Must | Conteúdo do arquivo é concatenado ao prompt enviado para a IA. |
+| RF-02 | **Parse de Documento/Código**: Extrair texto de PDFs, Markdown e alocar scripts Python. | Must | Conteúdo do arquivo é concatenado ou alocado em isolamento sob projetos. |
 | RF-03 | **STT (Voz)**: Transcrever áudios utilizando o modelo **Whisper** local. | Must | O texto transcrito é tratado como se fosse uma mensagem digitada. |
 | RF-04 | **Flag de Áudio**: Marcar pedidos que exijam resposta em voz (`requires_audio_reply`). | Must | Se o input for voz, a resposta padrão deve ser em voz (TTS). |
 

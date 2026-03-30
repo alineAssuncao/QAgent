@@ -183,6 +183,15 @@ class ProviderFactory:
                 ):
                     providers.append(lm_studio)
 
+        # 2. Ollama (Prioridade Local Secundária)
+        if settings.OLLAMA_MODELS:
+            ollama_model = settings.OLLAMA_MODELS.split(",")[0].strip()
+            ollama = OllamaProvider(settings.OLLAMA_BASE_URL, ollama_model)
+            if await ollama.is_available() and provider_health.is_healthy("Ollama"):
+                providers.append(ollama)
+            else:
+                provider_health.mark_unhealthy("Ollama")
+
         # 2. Gemini
         if settings.GEMINI_API_KEY:
             gemini = GeminiProvider(settings.GEMINI_API_KEY)

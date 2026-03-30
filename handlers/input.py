@@ -68,3 +68,24 @@ class TelegramInputHandler:
         finally:
             if os.path.exists(local_path):
                 os.remove(local_path)
+
+    @staticmethod
+    async def process_python_file(message: types.Message) -> str:
+        """Processa um arquivo python unico e gera um fallback project."""
+        from datetime import datetime
+        file_id = message.document.file_id
+        file = await bot.get_file(file_id)
+        file_path = file.file_path
+        
+        timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
+        project_folder = f"script_{message.from_user.id}_{timestamp}"
+        project_path = os.path.join(settings.PROJECTS_DIR, project_folder)
+        
+        if not os.path.exists(project_path):
+            os.makedirs(project_path, exist_ok=True)
+            
+        local_file_path = os.path.join(project_path, message.document.file_name)
+        await bot.download_file(file_path, local_file_path)
+        
+        return f"Teste Unitário em projects/{project_folder}"
+

@@ -93,9 +93,11 @@ class AgentController:
                 user_input = await TelegramInputHandler.process_pdf(message)
                 if message.caption:
                     user_input = f"{user_input}\n{message.caption}"
+            elif message.document.file_name.endswith(".py"):
+                user_input = await TelegramInputHandler.process_python_file(message)
             else:
                 await message.reply(
-                    "⚠️ Atualmente só suporto PDFs e Áudio além de texto."
+                    "⚠️ Atualmente só suporto PDFs, scripts Python (.py) e Áudio além de texto."
                 )
                 return
 
