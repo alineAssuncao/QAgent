@@ -30,7 +30,7 @@ A maturidade de LLMs (Gemini, DeepSeek) combinada com a robustez do Python para 
 ## 3. Goals (Objetivos)
 
 - [ ] G-01: Operar via Telegram utilizando a biblioteca **aiogram** (Python).
-- [ ] G-02: Intercambiar "cérebros" (LLMs) usando provedores como Gemini e DeepSeek.
+- [ ] G-02: Intercambiar "cérebros" (LLMs) usando provedores como LM Studio, Ollama, Gemini e DeepSeek.
 - [ ] G-03: Reter contexto em SQLite utilizando o módulo nativo `sqlite3` do Python.
 - [ ] G-04: Orquestrar e disparar skills de teste (UnitExpert, BackendExpert, etc.).
 - [ ] G-05: Garantir segurança através de Whitelist estrita por ID de usuário do Telegram.
@@ -57,7 +57,7 @@ A maturidade de LLMs (Gemini, DeepSeek) combinada com a robustez do Python para 
 **Usuário Autorizado:** QAs, Desenvolvedores, POs e Team Leads que precisam de auxílio rápido no ciclo de testes via dispositivos móveis ou desktop (Telegram).
 
 **Jornada Futura:**
-O usuário solicita a criação ou execução de uma suíte de testes pelo Telegram; o **QAgent** (rodando localmente) identifica a skill necessária, gera os scripts, executa no host e retorna o relatório de pass/fail diretamente no chat.
+O usuário solicita a criação ou execução de uma suíte de testes pelo Telegram, enviando a URL de git, path local ou fazendo upload de um **arquivo .py** avulso diretamente; o **QAgent** (rodando localmente) identifica a skill necessária, gera os scripts, executa no host e retorna o relatório de pass/fail diretamente no chat.
 
 ---
 

@@ -48,6 +48,30 @@ class LMStudioProvider(BaseProvider):
         return response.choices[0].message.content
 
 
+class OllamaProvider(BaseProvider):
+    def __init__(self, base_url: str, model_name: str):
+        super().__init__("Ollama (Local)", model_name)
+        # Ollama SDK usa o host diretamente limpo sem subcamadas de paths endpoints /v1
+        import ollama
+        host = base_url.replace("/v1", "")
+        self.client = ollama.AsyncClient(host=host)
+
+    async def is_available(self) -> bool:
+        try:
+            response = await self.client.list()
+            return len(response.get('models', [])) > 0
+        except Exception:
+            return False
+
+    async def generate_response(self, messages: List[Dict[str, str]]) -> str:
+        response = await self.client.chat(
+            model=self.model_name, messages=messages, options={
+                "num_ctx": 8192
+            }
+        )
+        return response['message']['content']
+
+
 class GeminiProvider(BaseProvider):
     def __init__(self, api_key: str):
         super().__init__("Google Gemini", "models/gemini-1.5-pro")
@@ -96,14 +120,23 @@ class ProviderFactory:
             if settings.LM_STUDIO_MODELS
             else "local-model"
         )
-        logging.info("settings.LM_STUDIO_BASE_URL", settings.LM_STUDIO_BASE_URL)
-        logging.info("lm_studio_model", lm_studio_model)
         lm_studio = LMStudioProvider(settings.LM_STUDIO_BASE_URL, lm_studio_model)
         if await lm_studio.is_available() and provider_health.is_healthy("LM Studio"):
-            logging.info("API LLM IS AVAIABLE!!", )
             providers.append(lm_studio)
         else:
             provider_health.mark_unhealthy("LM Studio")
+
+        # 2. Ollama (Prioridade Local Secundária)
+        ollama_model = (
+            settings.OLLAMA_MODELS.split(",")[0].strip()
+            if settings.OLLAMA_MODELS
+            else "llama3.2:latest"
+        )
+        ollama = OllamaProvider(settings.OLLAMA_BASE_URL, ollama_model)
+        if await ollama.is_available() and provider_health.is_healthy("Ollama"):
+            providers.append(ollama)
+        else:
+            provider_health.mark_unhealthy("Ollama")
 
         # 2. Gemini
         if settings.GEMINI_API_KEY:

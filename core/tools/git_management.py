@@ -102,10 +102,19 @@ class GitManagementTool(BaseTool):
                     languages_detected.append(lang)
                     break
 
+        if not languages_detected:
+            for root, dirs, files in os.walk(repo_path):
+                if any(f.endswith(".py") for f in files):
+                    languages_detected.append("Python")
+                    break
+
         frameworks_detected = []
         for filename, cmd, prereq in test_files:
             if os.path.exists(os.path.join(repo_path, filename)):
                 frameworks_detected.append(f"- {filename}: usar `{cmd}`")
+
+        if "Python" in languages_detected and not frameworks_detected:
+            frameworks_detected.append("- script avulso: usar `pytest`")
 
         result = "Linguagem detectada: " + ", ".join(set(languages_detected)) + "\n\n"
         result += "Frameworks de teste:\n" + "\n".join(frameworks_detected) + "\n\n"
@@ -117,6 +126,9 @@ class GitManagementTool(BaseTool):
                 os.path.join(repo_path, [f for f, _, p in test_files if p == prereq][0])
             ):
                 prereqs_needed.add(prereq)
+
+        if "Python" in languages_detected and not prereqs_needed:
+            prereqs_needed.add("Python")
 
         for prereq in prereqs_needed:
             installed = self._check_prerequisite(prereq)
@@ -163,6 +175,23 @@ class GitManagementTool(BaseTool):
                     return f"Comando {' '.join(cmd)} não encontrado. Instale o framework necessário."
                 except Exception as e:
                     return f"Erro ao executar: {str(e)}"
+
+        has_python_files = False
+        for root, dirs, files in os.walk(repo_path):
+            if any(f.endswith(".py") for f in files):
+                has_python_files = True
+                break
+
+        if has_python_files:
+            try:
+                cmd = ["pytest", "--maxfail=5"]
+                result = await self._run_command(cmd, cwd=repo_path)
+                status = "✅ Sucesso" if result.returncode == 0 else "❌ Falha"
+                return f"{status} ({' '.join(cmd)}):\n\n{result.stdout}\n{result.stderr}"
+            except FileNotFoundError:
+                return "Comando pytest não encontrado. Instale o framework necessário."
+            except Exception as e:
+                return f"Erro ao executar: {str(e)}"
 
         return "❌ Nenhum framework de teste detectado no projeto."
 
