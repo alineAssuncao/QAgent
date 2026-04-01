@@ -46,7 +46,6 @@ QA_KEYWORDS = [
     r"documentar", r"plano de teste",
 ]
 
-
 class QATestContext:
     def __init__(self):
         self.estado: TesteEstado = TesteEstado.ANALISE
@@ -248,7 +247,7 @@ class AgentController:
                 del self.contextos[user_id]
 
     async def _analisar_repositorio(
-        self, msg: types.Message, contexto: UnitTestContext, user_id: int
+        self, msg: types.Message, contexto: QATestContext, user_id: int
     ):
         from core.tools.repository import ListDirectoryTool
         from core.tools.git_management import GitManagementTool
@@ -486,7 +485,7 @@ class AgentController:
         except asyncio.CancelledError:
             pass
 
-    async def _implementar_testes(self, contexto: UnitTestContext):
+    async def _implementar_testes(self, contexto: QATestContext):
         from core.tools.repository import ListDirectoryTool, ReadFileTool, WriteFileTool
         from core.tools.git_management import GitManagementTool
         from core.tools.skills import SkillActivationTool
