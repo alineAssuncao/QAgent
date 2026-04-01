@@ -14,7 +14,7 @@ from openai import AsyncOpenAI
 # ══════════════════════════════════════════════════════════════
 LLM_REQUEST_TIMEOUT = 90  # Timeout por chamada ao LLM
 LLM_CONNECT_TIMEOUT = 10  # Timeout de conexão
-LM_STUDIO_TIMEOUT = 300  # Local é mais lento, timeout maior
+LM_STUDIO_TIMEOUT = 900  # Local é mais lento, timeout maior
 
 
 class BaseProvider(ABC):
@@ -82,7 +82,7 @@ class LMStudioProvider(BaseProvider):
 
 class GeminiProvider(BaseProvider):
     def __init__(self, api_key: str):
-        super().__init__("Google Gemini", "models/gemini-2.0-flash")
+        super().__init__("Google Gemini", "models/gemini-2.5-flash")
         self.client = genai.Client(api_key=api_key)
         self.api_key = api_key
 

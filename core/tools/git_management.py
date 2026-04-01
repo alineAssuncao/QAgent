@@ -158,11 +158,11 @@ class GitManagementTool(BaseTool):
 
         test_commands = [
             ("package.json", ["npm", "test"]),
-            ("pytest.ini", ["pytest", "--maxfail=5"]),
-            ("pyproject.toml", ["pytest", "--maxfail=5"]),
-            ("setup.py", ["pytest"]),
+            ("pytest.ini", ["pytest", "--cov=.", "--cov-report=term", "--maxfail=5"]),
+            ("pyproject.toml", ["pytest", "--cov=.", "--cov-report=term", "--maxfail=5"]),
+            ("setup.py", ["pytest", "--cov=.", "--cov-report=term"]),
             ("Cargo.toml", ["cargo", "test"]),
-            ("pom.xml", ["mvn", "test"]),
+            ("pom.xml", ["mvn", "clean", "test", "jacoco:report"]),
         ]
 
         for filename, cmd in test_commands:
@@ -170,6 +170,22 @@ class GitManagementTool(BaseTool):
                 try:
                     result = await self._run_command(cmd, cwd=repo_path)
                     status = "✅ Sucesso" if result.returncode == 0 else "❌ Falha"
+
+                    if filename == "pom.xml":
+                        jacoco_csv = os.path.join(repo_path, "target", "site", "jacoco", "jacoco.csv")
+                        if os.path.exists(jacoco_csv):
+                            import csv
+                            with open(jacoco_csv, mode='r', encoding='utf-8') as f:
+                                reader = csv.DictReader(f)
+                                missed = 0
+                                covered = 0
+                                for row in reader:
+                                    missed += int(row['INSTRUCTION_MISSED'])
+                                    covered += int(row['INSTRUCTION_COVERED'])
+                                if (missed + covered) > 0:
+                                    percent = int((covered / (covered + missed)) * 100)
+                                    result.stdout += f"\nTotal coverage: {percent}%\n"
+
                     return f"{status} ({' '.join(cmd)}):\n\n{result.stdout}\n{result.stderr}"
                 except FileNotFoundError:
                     return f"Comando {' '.join(cmd)} não encontrado. Instale o framework necessário."
@@ -184,7 +200,7 @@ class GitManagementTool(BaseTool):
 
         if has_python_files:
             try:
-                cmd = ["pytest", "--maxfail=5"]
+                cmd = ["pytest", "--cov=.", "--cov-report=term", "--maxfail=5"]
                 result = await self._run_command(cmd, cwd=repo_path)
                 status = "✅ Sucesso" if result.returncode == 0 else "❌ Falha"
                 return f"{status} ({' '.join(cmd)}):\n\n{result.stdout}\n{result.stderr}"

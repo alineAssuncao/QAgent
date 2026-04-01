@@ -335,14 +335,12 @@ class AgentController:
 
  ━━━━━━━━━━━━━━━━━━━━━━━━━━
 
- ✅ **Posso prosseguir com a criação dos testes unitários?**
-
- (Responda **SIM** para continuar ou **NÃO** para cancelar)
+ ✅ **Iniciando a criação automática dos testes unitários...**
  """
 
         await TelegramOutputHandler.send_response(contexto.chat_id, relatorio)
 
-        contexto.estado = TesteEstado.AGUARDANDO_CONFIRMACAO
+        await self._continuar_execucao(user_id)
 
     def _extrair_cobertura(self, output_testes: str) -> str:
         padroes_cobertura = [
@@ -515,16 +513,22 @@ class AgentController:
 
         system_prompt = f"""Você é o QAgent, especialista em QA e TESTES UNITÁRIOS.
 
-Tarefa: Criar um plano de testes unitários e implementá-los.
+Tarefa: Criar um plano de testes unitários e implementá-los usando as Ferramentas fornecidas.
 
 CONTEXTO:
 - Repositório: {contexto.repo_path}
 - Estrutura: {contexto.estrutura}
 - Frameworks: {contexto.frameworks}
 
+REGRAS ESTritas:
+1. Você NÃO PODE dar FINAL_ANSWER sem antes agir e usar as ferramentas.
+2. Use a ferramenta 'list_directory' ou 'read_file' para entender os arquivos fonte.
+3. Use a ferramenta 'write_file' para salvar os testes unitários.
+4. Use a ferramenta 'git_manage' com action='run_tests' para validar os testes.
+
 PASSO 1 - PLANO:
-Analise a estrutura do repositório e crie um arquivo .md com as tasks de testes a serem criadas.
-O arquivo deve ser salvo em: {tasks_md_path}
+Crie um arquivo .md com as tasks de testes a serem criadas. Use a ferramenta 'write_file'.
+Arquivo deve ser salvo em: {tasks_md_path}
 
 Formato do arquivo .md:
 # Plano de Testes Unitários
@@ -534,10 +538,11 @@ Formato do arquivo .md:
 2. [ ] Testar função Z
 
 PASSO 2 - IMPLEMENTAÇÃO:
-Após criar o arquivo .md, leia os arquivos fonte e crie os arquivos de teste unitário correspondentes.
+Leia os arquivos fonte (read_file) e crie/salve os arquivos de teste correspondentes no diretório correto (write_file).
 
 PASSO 3 - EXECUÇÃO:
-Execute os testes usando a ferramenta git_manage com action='run_tests'.
+Execute os testes usando a ferramenta 'git_manage' com action='run_tests'.
+Apenas depois disso você pode responder com FINAL_ANSWER.
 
 Ambiente: Windows
 Base: {settings.BASE_DIR}
@@ -554,17 +559,14 @@ Base: {settings.BASE_DIR}
             tool_manager=tool_manager,
         )
 
-        user_input = f"""Crie testes unitários para o repositório {contexto.repo_path}
+        user_input = f"""CRÍTICO: OBRIGATÓRIO USAR FERRAMENTAS AGORA.
 
-Estrutura detectada:
-{contexto.estrutura}
+Crie testes unitários para o repositório {contexto.repo_path}. O caminho dos arquivos deve começar com {contexto.repo_path}.
 
-Frameworks detectados:
-{contexto.frameworks}
-
-1. Primeiro, crie um arquivo .md com o plano de testes em: {tasks_md_path}
-2. Depois, implemente os testes conforme o plano
-3. Execute os testes e retorne o resultado
+1. Primeiro, USE A FERRAMENTA 'write_file' para criar o plano de testes em: {tasks_md_path}
+2. Depois, USE 'read_file' para ler os arquivos e 'write_file' para implementar os testes
+3. Em seguida, USE 'git_manage' (run_tests) para executar os testes
+4. Só então, retorne FINAL_ANSWER.
 """
 
         await loop.run(user_input, system_prompt)
@@ -594,7 +596,27 @@ Frameworks detectados:
         tasks_info = ""
         if os.path.exists(tasks_md_path):
             with open(tasks_md_path, "r", encoding="utf-8") as f:
-                tasks_info = f.read()[:500]
+                tasks_info = f.read()
+
+        caminho_relatorio_projeto = os.path.join(settings.BASE_DIR, contexto.repo_path, "relatorio_testes_qagent.md")
+        conteudo_relatorio = f"""# Relatório de Testes Automatizados - QAgent
+
+**Projeto:** {contexto.repo_name}
+**Data:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
+**Tempo de Execução:** {tempo_total} minutos
+
+## Resultado de Cobertura
+- **Cobertura Inicial:** {contexto.cobertura_inicial}
+- **Cobertura Final:** {contexto.cobertura_final}
+
+## Plano de Testes Executado (Resumo de Tasks)
+{tasks_info}
+"""
+        try:
+            with open(caminho_relatorio_projeto, 'w', encoding='utf-8') as f:
+                f.write(conteudo_relatorio)
+        except Exception as e:
+            logging.error(f"Erro ao salvar o relatório dentro do projeto: {e}")
 
         relatorio = f"""✅ **TESTES UNITÁRIOS CONCLUÍDOS**
 
@@ -611,15 +633,15 @@ Frameworks detectados:
 📝 **Resumo do que foi feito:**
 • Análise da estrutura do repositório
 • Detecção de frameworks de teste
-• Criação do plano de testes ({tasks_md_path})
 • Implementação dos testes unitários
 • Execução e validação dos testes
+• 📑 **Relatório detalhado exportado em:** `{contexto.repo_path}/relatorio_testes_qagent.md`
 
-📁 **Arquivos criados em:** {contexto.repo_path}
+📁 **Arquivos de código criados em:** {contexto.repo_path}
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-💡 Os testes foram implementados conforme o plano criado.
+💡 Os testes foram implementados conforme o plano e o registro salvo no projeto.
 """
 
         await TelegramOutputHandler.send_response(contexto.chat_id, relatorio)
