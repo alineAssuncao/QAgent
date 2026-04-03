@@ -192,13 +192,13 @@ class GitManagementTool(BaseTool):
                 except Exception as e:
                     return f"Erro ao executar: {str(e)}"
 
-        has_python_files = False
+        has_test_python_files = False
         for root, dirs, files in os.walk(repo_path):
-            if any(f.endswith(".py") for f in files):
-                has_python_files = True
+            if any(f.endswith(".py") and f.startswith("test_") for f in files):
+                has_test_python_files = True
                 break
 
-        if has_python_files:
+        if has_test_python_files:
             try:
                 cmd = ["pytest", "--cov=.", "--cov-report=term", "--maxfail=5"]
                 result = await self._run_command(cmd, cwd=repo_path)
