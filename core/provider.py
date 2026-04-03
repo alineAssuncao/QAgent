@@ -140,8 +140,9 @@ class GeminiProvider(BaseProvider):
 
 
 class OpenAICompatibleProvider(BaseProvider):
-    def __init__(self, api_key: str, base_url: str = None, name: str = "OpenAI"):
-        model_name = "gpt-3.5-turbo" if "openai" in name.lower() else "deepseek-chat"
+    def __init__(self, api_key: str, base_url: str = None, name: str = "OpenAI", model_name: str = None):
+        if not model_name:
+            model_name = "gpt-3.5-turbo" if "openai" in name.lower() else "deepseek-chat"
         super().__init__(name, model_name)
         self.client = AsyncOpenAI(
             api_key=api_key,
@@ -202,7 +203,20 @@ class ProviderFactory:
             else:
                 provider_health.mark_unhealthy("Google Gemini")
 
-        # 3. DeepSeek
+        # 3. OpenRouter
+        if settings.OPENROUTER_API_KEY and settings.OPENROUTER_MODEL:
+            openrouter = OpenAICompatibleProvider(
+                api_key=settings.OPENROUTER_API_KEY,
+                base_url="https://openrouter.ai/api/v1",
+                name="OpenRouter",
+                model_name=settings.OPENROUTER_MODEL
+            )
+            if await openrouter.is_available() and provider_health.is_healthy("OpenRouter"):
+                providers.append(openrouter)
+            else:
+                provider_health.mark_unhealthy("OpenRouter")
+
+        # 4. DeepSeek
         if settings.DEEPSEEK_API_KEY:
             deepseek = OpenAICompatibleProvider(
                 api_key=settings.DEEPSEEK_API_KEY,

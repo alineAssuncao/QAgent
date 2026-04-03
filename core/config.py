@@ -15,6 +15,8 @@ class Settings(BaseSettings):
     OLLAMA_MODELS: str = ""  # Lista de modelos locais servidos pelo Ollama
     GEMINI_API_KEY: str = ""
     DEEPSEEK_API_KEY: str = ""
+    OPENROUTER_API_KEY: str = ""
+    OPENROUTER_MODEL: str = ""
     OPENAI_API_KEY: str = ""
     
     # Agent Core Settings
