@@ -108,10 +108,25 @@ class GitManagementTool(BaseTool):
                     languages_detected.append("Python")
                     break
 
+        test_files_in_dir = []
+        for root, dirs, files in os.walk(repo_path):
+            for f in files:
+                if f.startswith("test_") and f.endswith(".py"):
+                    test_files_in_dir.append(f)
+                elif f.endswith("_test.py"):
+                    test_files_in_dir.append(f)
+
         frameworks_detected = []
         for filename, cmd, prereq in test_files:
             if os.path.exists(os.path.join(repo_path, filename)):
                 frameworks_detected.append(f"- {filename}: usar `{cmd}`")
+
+        if (
+            "Python" in languages_detected
+            and test_files_in_dir
+            and not frameworks_detected
+        ):
+            frameworks_detected.append("- arquivos de teste detectados: usar `pytest`")
 
         if "Python" in languages_detected and not frameworks_detected:
             frameworks_detected.append("- script avulso: usar `pytest`")
@@ -158,9 +173,29 @@ class GitManagementTool(BaseTool):
 
         test_commands = [
             ("package.json", ["npm", "test"]),
-            ("pytest.ini", ["pytest", "--cov=.", "--cov-report=term", "--maxfail=5"]),
-            ("pyproject.toml", ["pytest", "--cov=.", "--cov-report=term", "--maxfail=5"]),
-            ("setup.py", ["pytest", "--cov=.", "--cov-report=term"]),
+            (
+                "pytest.ini",
+                [
+                    "python",
+                    "-m",
+                    "pytest",
+                    "--cov=.",
+                    "--cov-report=term",
+                    "--maxfail=5",
+                ],
+            ),
+            (
+                "pyproject.toml",
+                [
+                    "python",
+                    "-m",
+                    "pytest",
+                    "--cov=.",
+                    "--cov-report=term",
+                    "--maxfail=5",
+                ],
+            ),
+            ("setup.py", ["python", "-m", "pytest", "--cov=.", "--cov-report=term"]),
             ("Cargo.toml", ["cargo", "test"]),
             ("pom.xml", ["mvn", "clean", "test", "jacoco:report"]),
         ]
@@ -172,16 +207,19 @@ class GitManagementTool(BaseTool):
                     status = "✅ Sucesso" if result.returncode == 0 else "❌ Falha"
 
                     if filename == "pom.xml":
-                        jacoco_csv = os.path.join(repo_path, "target", "site", "jacoco", "jacoco.csv")
+                        jacoco_csv = os.path.join(
+                            repo_path, "target", "site", "jacoco", "jacoco.csv"
+                        )
                         if os.path.exists(jacoco_csv):
                             import csv
-                            with open(jacoco_csv, mode='r', encoding='utf-8') as f:
+
+                            with open(jacoco_csv, mode="r", encoding="utf-8") as f:
                                 reader = csv.DictReader(f)
                                 missed = 0
                                 covered = 0
                                 for row in reader:
-                                    missed += int(row['INSTRUCTION_MISSED'])
-                                    covered += int(row['INSTRUCTION_COVERED'])
+                                    missed += int(row["INSTRUCTION_MISSED"])
+                                    covered += int(row["INSTRUCTION_COVERED"])
                                 if (missed + covered) > 0:
                                     percent = int((covered / (covered + missed)) * 100)
                                     result.stdout += f"\nTotal coverage: {percent}%\n"
@@ -193,17 +231,55 @@ class GitManagementTool(BaseTool):
                     return f"Erro ao executar: {str(e)}"
 
         has_test_python_files = False
+        logging.info(f"[GIT_MANAGE] Searching for test files in {repo_path}")
         for root, dirs, files in os.walk(repo_path):
-            if any(f.endswith(".py") and f.startswith("test_") for f in files):
+            test_files_found = [
+                f
+                for f in files
+                if f.endswith(".py")
+                and (f.startswith("test_") or f.endswith("_test.py"))
+            ]
+            if test_files_found:
+                logging.info(
+                    f"[GIT_MANAGE] Found test files: {test_files_found} in {root}"
+                )
                 has_test_python_files = True
                 break
+            if "tests" in dirs:
+                tests_dir = os.path.join(root, "tests")
+                if os.path.isdir(tests_dir):
+                    for f in os.listdir(tests_dir):
+                        if f.endswith(".py"):
+                            logging.info(f"[GIT_MANAGE] Found test file in tests/: {f}")
+                            has_test_python_files = True
+                            break
+                    if has_test_python_files:
+                        break
+            if "tests" in dirs:
+                tests_dir = os.path.join(root, "tests")
+                if os.path.isdir(tests_dir):
+                    for f in os.listdir(tests_dir):
+                        if f.endswith(".py"):
+                            has_test_python_files = True
+                            break
+                    if has_test_python_files:
+                        break
 
         if has_test_python_files:
             try:
-                cmd = ["pytest", "--cov=.", "--cov-report=term", "--maxfail=5"]
+                cmd = [
+                    "python",
+                    "-m",
+                    "pytest",
+                    "--cov=.",
+                    "--cov-report=term",
+                    "--maxfail=5",
+                ]
                 result = await self._run_command(cmd, cwd=repo_path)
                 status = "✅ Sucesso" if result.returncode == 0 else "❌ Falha"
-                return f"{status} ({' '.join(cmd)}):\n\n{result.stdout}\n{result.stderr}"
+                return (
+                    f"{status} ({' '.join(cmd)}):\n\n{result.stdout}\n{result.stderr}"
+                )
             except FileNotFoundError:
                 return "Comando pytest não encontrado. Instale o framework necessário."
             except Exception as e:

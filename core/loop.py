@@ -2,10 +2,12 @@ import logging
 import json
 import re
 from typing import List, Dict, Any, Optional, Callable, Coroutine, Union
-from core.provider import BaseProvider
+from core.provider import BaseProvider, RateLimitError
 from memory.repository import MessageRepository
 from core.config import settings
 from core.tools.manager import ToolManager
+from core.middleware import provider_health
+
 
 
 class AgentLoop:
@@ -15,10 +17,13 @@ class AgentLoop:
         provider: BaseProvider,
         tool_manager: Optional[ToolManager] = None,
         status_callback: Optional[Callable[[str], Coroutine[Any, Any, None]]] = None,
+        available_providers: List[BaseProvider] = None,
     ) -> None:
         self.conversation_id: str = conversation_id
-        self.provider: BaseProvider = provider
+        self.provider: BaseProvider = provider # Provedor atual
+        self.available_providers: List[BaseProvider] = available_providers or [provider]
         self.tool_manager: Optional[ToolManager] = tool_manager
+
         self.max_iterations: int = settings.MAX_ITERATIONS
         self.status_callback: Optional[Callable[[str], Coroutine[Any, Any, None]]] = (
             status_callback
@@ -83,11 +88,44 @@ Lembre-se: Sempre use 'FINAL_ANSWER:' para concluir sua tarefa.
                 f"\n{'=' * 20} Iteração {current_iteration}/{self.max_iterations} {'=' * 20}"
             )
 
-            # 3. Solicitar inferência ao Provedor
-            response_content = await self.provider.generate_response(messages)
+            # 3. Solicitar inferência ao Provedor (com lógica de Fallback)
+            response_content = None
+            retries = 0
+            max_fallback_retries = len(self.available_providers)
+
+            while retries < max_fallback_retries:
+                try:
+                    response_content = await self.provider.generate_response(messages)
+                    break 
+                except RateLimitError as e:
+                    retries += 1
+                    provider_health.mark_unhealthy(self.provider.name)
+                    
+                    # Tentar encontrar próximo provedor saudável
+                    next_provider = None
+                    for p in self.available_providers:
+                        if p.name != self.provider.name and provider_health.is_healthy(p.name):
+                            next_provider = p
+                            break
+                    
+                    if next_provider:
+                        msg_fallback = f"🔄 Limite atingido no {self.provider.name}. Alternando para {next_provider.name}..."
+                        await self._update_status(msg_fallback)
+                        self.provider = next_provider
+                    else:
+                        error_msg = f"❌ Limite de cota atingido em todos os provedores disponíveis."
+                        await self._update_status(error_msg)
+                        raise e
+                except Exception as e:
+                    # Outros erros (timeout, etc) podem ser tratados aqui ou subir
+                    raise e
+            
+            if not response_content:
+                raise Exception("Falha crítica: Provedor não retornou conteúdo após tentativas de fallback.")
 
             # Adicionar a resposta do assistente ao contexto do loop
             messages.append({"role": "assistant", "content": response_content})
+
 
             # 4. Verificar se é uma Resposta Final
             if "FINAL_ANSWER:" in response_content:

@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""
     
     # Agent Core Settings
-    MAX_ITERATIONS: int = 5
+    MAX_ITERATIONS: int = 20
     MEMORY_WINDOW_SIZE: int = 10
     BASE_DIR: Path = Path(__file__).resolve().parent.parent
     DATABASE_PATH: str = str(BASE_DIR / "data" / "qagent.db")
