@@ -152,21 +152,56 @@ class GitManagementTool(BaseTool):
         commands = prereq_commands.get(prereq, [])
         return any(shutil.which(cmd) for cmd in commands)
 
+    async def _ensure_pytest_installed(self, repo_path: str) -> str:
+        """Verifica se o pytest está instalado na pasta venv e realiza a instalação se necessário."""
+        import sys
+        
+        if sys.platform == "win32":
+            pytest_path = os.path.join(settings.BASE_DIR, "venv", "Scripts", "pytest.exe")
+            pip_path = os.path.join(settings.BASE_DIR, "venv", "Scripts", "pip.exe")
+        else:
+            pytest_path = os.path.join(settings.BASE_DIR, "venv", "bin", "pytest")
+            pip_path = os.path.join(settings.BASE_DIR, "venv", "bin", "pip")
+
+        if not os.path.exists(pytest_path):
+            logging.info("pytest não encontrado no venv. Realizando a instalação do pytest e pytest-cov...")
+            if os.path.exists(pip_path):
+                result = await self._run_command([pip_path, "install", "pytest", "pytest-cov"], cwd=repo_path)
+                if result.returncode != 0:
+                    return f"Erro ao instalar pytest através do venv pip:\n{result.stderr}"
+            else:
+                # Fallback, tenta usar python -m pip no contexto atual
+                result = await self._run_command(["python", "-m", "pip", "install", "pytest", "pytest-cov"], cwd=repo_path)
+                if result.returncode != 0:
+                    return f"Erro ao instalar pytest:\nPython: {result.stderr}"
+        return "ok"
+
     async def _run_tests(self, repo_path: str) -> str:
         """Executa testes detectando automaticamente o framework."""
         logging.info(f"Executando testes em {repo_path}")
 
+        import sys
+        if sys.platform == "win32":
+            pytest_cmd = os.path.join(settings.BASE_DIR, "venv", "Scripts", "pytest.exe")
+        else:
+            pytest_cmd = os.path.join(settings.BASE_DIR, "venv", "bin", "pytest")
+
         test_commands = [
             ("package.json", ["npm", "test"]),
-            ("pytest.ini", ["pytest", "--cov=.", "--cov-report=term", "--maxfail=5"]),
-            ("pyproject.toml", ["pytest", "--cov=.", "--cov-report=term", "--maxfail=5"]),
-            ("setup.py", ["pytest", "--cov=.", "--cov-report=term"]),
+            ("pytest.ini", [pytest_cmd, "--cov=.", "--cov-report=term", "--maxfail=5"]),
+            ("pyproject.toml", [pytest_cmd, "--cov=.", "--cov-report=term", "--maxfail=5"]),
+            ("setup.py", [pytest_cmd, "--cov=.", "--cov-report=term"]),
             ("Cargo.toml", ["cargo", "test"]),
             ("pom.xml", ["mvn", "clean", "test", "jacoco:report"]),
         ]
 
         for filename, cmd in test_commands:
             if os.path.exists(os.path.join(repo_path, filename)):
+                if cmd[0] == pytest_cmd:
+                    install_status = await self._ensure_pytest_installed(repo_path)
+                    if install_status != "ok":
+                        return install_status
+
                 try:
                     result = await self._run_command(cmd, cwd=repo_path)
                     status = "✅ Sucesso" if result.returncode == 0 else "❌ Falha"
@@ -199,8 +234,12 @@ class GitManagementTool(BaseTool):
                 break
 
         if has_test_python_files:
+            install_status = await self._ensure_pytest_installed(repo_path)
+            if install_status != "ok":
+                return install_status
+
             try:
-                cmd = ["pytest", "--cov=.", "--cov-report=term", "--maxfail=5"]
+                cmd = [pytest_cmd, "--cov=.", "--cov-report=term", "--maxfail=5"]
                 result = await self._run_command(cmd, cwd=repo_path)
                 status = "✅ Sucesso" if result.returncode == 0 else "❌ Falha"
                 return f"{status} ({' '.join(cmd)}):\n\n{result.stdout}\n{result.stderr}"
