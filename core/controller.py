@@ -16,6 +16,7 @@ from memory.database import Database
 from handlers.input import TelegramInputHandler
 from handlers.output import TelegramOutputHandler
 from aiogram import types
+import sys
 
 class TesteEstado(Enum):
     ANALISE = "analise"
@@ -219,22 +220,22 @@ class AgentController:
         self.contextos[user_id] = contexto
 
         try:
-            msg = await message.reply("🔄 **Iniciando análise do repositório...**")
+            msg = await message.reply("🔄 <b>Iniciando análise do repositório...</b>", parse_mode="HTML")
 
             if git_url:
-                await msg.edit_text("📥 **Clonando repositório...**")
+                await msg.edit_text("📥 <b>Clonando repositório...</b>", parse_mode="HTML")
                 from core.tools.git import CloneRepositoryTool
 
                 clone_tool = CloneRepositoryTool()
                 await clone_tool.execute(url=git_url)
                 contexto.repo_name = git_url.split("/")[-1].replace(".git", "")
                 contexto.repo_path = f"projects/{contexto.repo_name}"
-                await msg.edit_text(f"✅ **Repositório clonado:** {contexto.repo_name}")
+                await msg.edit_text(f"✅ <b>Repositório clonado:</b> {contexto.repo_name}", parse_mode="HTML")
             else:
                 contexto.repo_name = local_path or "unknown"
                 contexto.repo_path = f"projects/{contexto.repo_name}"
                 await msg.edit_text(
-                    f"✅ **Usando repositório local:** {contexto.repo_name}"
+                    f"✅ <b>Usando repositório local:</b> {contexto.repo_name}", parse_mode="HTML"
                 )
 
             await self._analisar_repositorio(msg, contexto, user_id)
@@ -253,13 +254,13 @@ class AgentController:
 
         from core.tools.skills import SkillActivationTool
 
-        await msg.edit_text("🔍 **Analisando estrutura do repositório...**")
+        await msg.edit_text("🔍 <b>Analisando estrutura do repositório...</b>", parse_mode="HTML")
 
         list_tool = ListDirectoryTool()
         estrutura = await list_tool.execute(path=contexto.repo_path)
         contexto.estrutura = estrutura
 
-        await msg.edit_text("🛠️ **Detectando frameworks de teste...**")
+        await msg.edit_text("🛠️ <b>Detectando frameworks de teste...</b>", parse_mode="HTML")
 
         git_tool = GitManagementTool()
         frameworks = await git_tool.execute(
@@ -299,7 +300,7 @@ class AgentController:
                 del self.contextos[user_id]
             return
 
-        await msg.edit_text("📊 <b>Executando testes atuais para medir cobertura...</b>")
+        await msg.edit_text("📊 <b>Executando testes atuais para medir cobertura...</b>", parse_mode="HTML")
 
         resultado_testes = await git_tool.execute(
             action="run_tests", repo_path=contexto.repo_path
@@ -393,6 +394,7 @@ class AgentController:
         for name, stmts, miss, cover in resultados:
             percentual = int(cover.replace("%", ""))
             bolinha = self._indicador(percentual)
+            barra = self.gerar_barra(percentual)
 
             if name == "TOTAL":
                 total_info = (stmts, miss, cover, bolinha)
@@ -400,7 +402,7 @@ class AgentController:
 
             linhas.append(
                 f"{bolinha} <b>{name}</b>\n"
-                f"Cobertura: <b>{cover}</b>\n"
+                f"Cobertura: {barra} \n"
                 f"Total de linhas: {stmts}\n"
                 f"Linhas não cobertas: {miss}\n"
             )
@@ -413,12 +415,18 @@ class AgentController:
             mensagem += (
                 "\n━━━━━━━━━━━━━━\n"
                 f"{bolinha} <b>COBERTURA GERAL</b>\n"
-                f"Cobertura: <b>{cover}</b>\n"
+                f"Cobertura: {barra}\n"
                 f"Total de linhas: {stmts}\n"
                 f"Linhas não cobertas: {miss}"
             )
 
         return mensagem
+
+    def gerar_barra(self, percentual: int) -> str:
+        blocos_total = 10
+        preenchidos = round((percentual / 100) * blocos_total)
+        barra = "█" * preenchidos + "░" * (blocos_total - preenchidos)
+        return f"<code>{barra}</code> {percentual}%"
 
     def _gerar_recomendacoes(self, estrutura: str, frameworks: str) -> str:
         recomendacoes = []
@@ -511,6 +519,7 @@ class AgentController:
             await TelegramOutputHandler.send_response(
                 contexto.chat_id, f"❌ <b>Erro durante implementação:</b> {str(e)}", parse_mode="HTML"
             )
+            raise e
         finally:
             if user_id in self.contextos:
                 if contexto.progresso_task and not contexto.progresso_task.done():
@@ -600,7 +609,7 @@ class AgentController:
                     Execute os testes usando a ferramenta 'git_manage' com action='run_tests'.
                     Apenas depois disso você pode responder com FINAL_ANSWER.
 
-                    Ambiente: Windows
+                    Ambiente: {"Windows" if sys.platform == "win32" else "Linux"}
                     Base: {settings.BASE_DIR}
                     """
 
