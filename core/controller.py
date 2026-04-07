@@ -1370,36 +1370,39 @@ NÃO DÊ FINAL_ANSWER APENAS COM O PLANO. VOCÊ DEVE ESCREVER O CÓDIGO DOS TEST
         for line in lines:
             line = line.strip()
             if (
-                line.startswith("src/")
-                or line.startswith("tests/")
-                or line.startswith("app/")
-                or line.startswith("lib/")
-                or line.startswith("server.py")
-                or line.startswith("main.")
+                line
+                and not line.startswith("=")
+                and not line.startswith("TOTAL")
+                and not line.startswith("Name")
             ):
                 parts = line.split()
                 if len(parts) >= 4:
-                    try:
-                        module = parts[0]
-                        stmts = int(parts[1]) if parts[1].isdigit() else 0
-                        miss = int(parts[2]) if parts[2].isdigit() else 0
-                        coverage = parts[3].replace("%", "").replace(",", "")
-                        if coverage.replace(".", "").replace("-", "").isdigit():
-                            cov_float = float(coverage)
+                    first_col = parts[0]
+                    if (
+                        first_col.endswith(".py")
+                        or "/" in first_col
+                        or "\\" in first_col
+                    ):
+                        try:
+                            module = first_col.replace("\\", "/")
+                            stmts = int(parts[1]) if parts[1].isdigit() else 0
+                            miss = int(parts[2]) if parts[2].isdigit() else 0
+                            coverage = parts[3].replace("%", "").replace(",", "")
+                            if coverage.replace(".", "").replace("-", "").isdigit():
+                                cov_float = float(coverage)
+                                cov_before = max(0, cov_float * 0.5)
+                                delta = cov_float - cov_before
 
-                            cov_before = max(0, cov_float * 0.5)
-                            delta = cov_float - cov_before
-
-                            breakdown.append(
-                                {
-                                    "module": module,
-                                    "coverage_before": round(cov_before, 2),
-                                    "coverage_after": round(cov_float, 2),
-                                    "delta": round(delta, 2),
-                                }
-                            )
-                    except:
-                        pass
+                                breakdown.append(
+                                    {
+                                        "module": module,
+                                        "coverage_before": round(cov_before, 2),
+                                        "coverage_after": round(cov_float, 2),
+                                        "delta": round(delta, 2),
+                                    }
+                                )
+                        except:
+                            pass
 
         if not breakdown and coverage_after > 0:
             breakdown.append(
