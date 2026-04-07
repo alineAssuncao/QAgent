@@ -287,19 +287,19 @@ class AgentController:
                 await clone_tool.execute(url=git_url)
                 contexto.repo_name = git_url.split("/")[-1].replace(".git", "")
                 contexto.repo_path = f"projects/{contexto.repo_name}"
-                await msg.edit_text(
+                await message.edit_text(
                     f"✅ <b>Repositório clonado:</b> {contexto.repo_name}",
                     parse_mode="HTML",
                 )
             else:
                 contexto.repo_name = local_path or "unknown"
                 contexto.repo_path = f"projects/{contexto.repo_name}"
-                await msg.edit_text(
+                await message.edit_text(
                     f"✅ <b>Usando repositório local:</b> {contexto.repo_name}",
                     parse_mode="HTML",
                 )
 
-            await self._analisar_repositorio(contexto, user_id)
+            await self._analisar_repositorio(contexto, user_id, message)
 
         except Exception as e:
             logging.error(f"Erro no fluxo de teste unitário: {e}")
@@ -345,13 +345,15 @@ _Acompanhe o progresso em tempo real._"""
         except Exception as e:
             logging.warning(f"Não foi possível editar a mensagem de status: {e}")
 
-    async def _analisar_repositorio(self, contexto: QATestContext, user_id: int):
+    async def _analisar_repositorio(
+        self, contexto: QATestContext, user_id: int, message: types.Message
+    ):
         from core.tools.repository import ListDirectoryTool
         from core.tools.git_management import GitManagementTool
 
         from core.tools.skills import SkillActivationTool
 
-        await msg.edit_text(
+        await message.edit_text(
             "🔍 <b>Analisando estrutura do repositório...</b>", parse_mode="HTML"
         )
 
@@ -359,7 +361,7 @@ _Acompanhe o progresso em tempo real._"""
         estrutura = await list_tool.execute(path=contexto.repo_path)
         contexto.estrutura = estrutura
 
-        await msg.edit_text(
+        await message.edit_text(
             "🛠️ <b>Detectando frameworks de teste...</b>", parse_mode="HTML"
         )
 
@@ -402,7 +404,7 @@ _Acompanhe o progresso em tempo real._"""
                 del self.contextos[user_id]
             return
 
-        await msg.edit_text(
+        await message.edit_text(
             "📊 <b>Executando testes atuais para medir cobertura...</b>",
             parse_mode="HTML",
         )
