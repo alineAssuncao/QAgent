@@ -341,6 +341,18 @@ _Acompanhe o progresso em tempo real._"""
 
         from core.bot import bot
 
+        if contexto.status_msg_id:
+            try:
+                await bot.edit_message_text(
+                    chat_id=contexto.chat_id,
+                    message_id=contexto.status_msg_id,
+                    text=card_texto,
+                    parse_mode="HTML",
+                )
+                return
+            except Exception as e:
+                logging.warning(f"Não foi possível editar mensagem, enviando nova: {e}")
+
         try:
             new_msg = await bot.send_message(
                 contexto.chat_id, card_texto, parse_mode="HTML"
