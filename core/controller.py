@@ -20,6 +20,7 @@ from core.tools.repository import ReadFileTool, WriteFileTool
 from aiogram import types
 import sys
 
+
 class TesteEstado(Enum):
     ANALISE = "analise"
     AGUARDANDO_CONFIRMACAO = "aguardando_confirmacao"
@@ -286,12 +287,16 @@ class AgentController:
                 await clone_tool.execute(url=git_url)
                 contexto.repo_name = git_url.split("/")[-1].replace(".git", "")
                 contexto.repo_path = f"projects/{contexto.repo_name}"
-                await msg.edit_text(f"✅ <b>Repositório clonado:</b> {contexto.repo_name}", parse_mode="HTML")
+                await msg.edit_text(
+                    f"✅ <b>Repositório clonado:</b> {contexto.repo_name}",
+                    parse_mode="HTML",
+                )
             else:
                 contexto.repo_name = local_path or "unknown"
                 contexto.repo_path = f"projects/{contexto.repo_name}"
                 await msg.edit_text(
-                    f"✅ <b>Usando repositório local:</b> {contexto.repo_name}", parse_mode="HTML"
+                    f"✅ <b>Usando repositório local:</b> {contexto.repo_name}",
+                    parse_mode="HTML",
                 )
 
             await self._analisar_repositorio(contexto, user_id)
@@ -299,22 +304,24 @@ class AgentController:
         except Exception as e:
             logging.error(f"Erro no fluxo de teste unitário: {e}")
             await self._set_step_status(user_id, "clonagem", "❌")
-            await TelegramOutputHandler.send_response(chat_id, f"❌ **Erro:** {str(e)}", parse_mode="HTML")
+            await TelegramOutputHandler.send_response(
+                chat_id, f"❌ **Erro:** {str(e)}", parse_mode="HTML"
+            )
             if user_id in self.contextos:
                 del self.contextos[user_id]
 
     async def _renderizar_card_status(self, contexto: QATestContext) -> str:
         """Gera a representação textual do Lifecycle Card."""
         l = contexto.lifecycle
-        return f"""📋 **Status de Automação: QAgent**
-━━━━━━━━━━━━━━━━━━━
-{l["clonagem"]} 📥 **Clonagem do Repositório**
-{l["analise"]} 🔍 **Análise de Estrutura**
-{l["medicao_inicial"]} 📊 **Medição de Cobertura Inicial**
-{l["implementacao"]} 🛠️ **Implementação de Testes**
-{l["dashboard"]} 🎨 **Geração do Dashboard Analítico**
-{l["conclusao"]} ✅ **Conclusão e Relatório**
-━━━━━━━━━━━━━━━━━━━
+        return f"""📋 <b>Status de Automação: QAgent</b>
+━━━━━━━━━━━━━━━━━━━━
+{l["clonagem"]} 📥 <b>Clonagem do Repositório</b>
+{l["analise"]} 🔍 <b>Análise de Estrutura</b>
+{l["medicao_inicial"]} 📊 <b>Medição de Cobertura Inicial</b>
+{l["implementacao"]} 🛠️ <b>Implementação de Testes</b>
+{l["dashboard"]} 🎨 <b>Geração do Dashboard Analítico</b>
+{l["conclusao"]} ✅ <b>Conclusão e Relatório</b>
+━━━━━━━━━━━━━━━━━━━━
 _Acompanhe o progresso em tempo real._"""
 
     async def _set_step_status(self, user_id: int, step: str, status: str):
@@ -333,6 +340,7 @@ _Acompanhe o progresso em tempo real._"""
                 chat_id=contexto.chat_id,
                 message_id=contexto.status_msg_id,
                 text=card_texto,
+                parse_mode="HTML",
             )
         except Exception as e:
             logging.warning(f"Não foi possível editar a mensagem de status: {e}")
@@ -343,13 +351,17 @@ _Acompanhe o progresso em tempo real._"""
 
         from core.tools.skills import SkillActivationTool
 
-        await msg.edit_text("🔍 <b>Analisando estrutura do repositório...</b>", parse_mode="HTML")
+        await msg.edit_text(
+            "🔍 <b>Analisando estrutura do repositório...</b>", parse_mode="HTML"
+        )
 
         list_tool = ListDirectoryTool()
         estrutura = await list_tool.execute(path=contexto.repo_path)
         contexto.estrutura = estrutura
 
-        await msg.edit_text("🛠️ <b>Detectando frameworks de teste...</b>", parse_mode="HTML")
+        await msg.edit_text(
+            "🛠️ <b>Detectando frameworks de teste...</b>", parse_mode="HTML"
+        )
 
         git_tool = GitManagementTool()
         frameworks = await git_tool.execute(
@@ -384,13 +396,16 @@ _Acompanhe o progresso em tempo real._"""
 
                 ━━━━━━━━━━━━━━━━━━━━━━━━━━
                 """,
-                parse_mode="HTML"
+                parse_mode="HTML",
             )
             if user_id in self.contextos:
                 del self.contextos[user_id]
             return
 
-        await msg.edit_text("📊 <b>Executando testes atuais para medir cobertura...</b>", parse_mode="HTML")
+        await msg.edit_text(
+            "📊 <b>Executando testes atuais para medir cobertura...</b>",
+            parse_mode="HTML",
+        )
 
         repo_full_path = os.path.join(settings.BASE_DIR, contexto.repo_path)
 
@@ -463,7 +478,9 @@ _Acompanhe o progresso em tempo real._"""
 ✅ <b>Iniciando a criação automática dos testes unitários...</b>
 """
 
-        await TelegramOutputHandler.send_response(contexto.chat_id, relatorio, parse_mode="HTML")
+        await TelegramOutputHandler.send_response(
+            contexto.chat_id, relatorio, parse_mode="HTML"
+        )
 
         await self._continuar_execucao(user_id)
 
@@ -499,14 +516,13 @@ _Acompanhe o progresso em tempo real._"""
         else:
             return "🟢"
 
-
-    def _extrair_resumo_coverage(self,texto: str) -> str:
+    def _extrair_resumo_coverage(self, texto: str) -> str:
         padrao = re.compile(
             r"^(?P<name>\S+\.py|TOTAL)\s+"
             r"(?P<stmts>\d+)\s+"
             r"(?P<miss>\d+)\s+"
             r"(?P<cover>\d+%)",
-            re.MULTILINE
+            re.MULTILINE,
         )
 
         resultados = padrao.findall(texto)
@@ -620,7 +636,9 @@ _Acompanhe o progresso em tempo real._"""
         contexto.erro_encontrado = False
 
         await TelegramOutputHandler.send_response(
-            contexto.chat_id, "🚀 <b>Iniciando implementação dos testes unitários...</b>", parse_mode="HTML"
+            contexto.chat_id,
+            "🚀 <b>Iniciando implementação dos testes unitários...</b>",
+            parse_mode="HTML",
         )
 
         contexto.progresso_task = asyncio.create_task(
@@ -639,13 +657,17 @@ _Acompanhe o progresso em tempo real._"""
 
         except asyncio.CancelledError:
             await TelegramOutputHandler.send_response(
-                contexto.chat_id, "❌ <b>Execução cancelada pelo usuário.</b>", parse_mode="HTML"
+                contexto.chat_id,
+                "❌ <b>Execução cancelada pelo usuário.</b>",
+                parse_mode="HTML",
             )
         except Exception as e:
             logging.error(f"Erro na implementação: {e}")
             contexto.erro_encontrado = True
             await TelegramOutputHandler.send_response(
-                contexto.chat_id, f"❌ <b>Erro durante implementação:</b> {str(e)}", parse_mode="HTML"
+                contexto.chat_id,
+                f"❌ <b>Erro durante implementação:</b> {str(e)}",
+                parse_mode="HTML",
             )
             raise e
         finally:
@@ -673,7 +695,7 @@ _Acompanhe o progresso em tempo real._"""
                     f"⏳  <b>Em andamento há {tempo_decorrido} minutos...</b>\n\n"
                     "Os testes unitários ainda estão sendo implementados.\n"
                     "Aguarde mais um momento por favor.",
-                    parse_mode="HTML"
+                    parse_mode="HTML",
                 )
 
         except asyncio.CancelledError:
@@ -772,7 +794,6 @@ NÃO DÊ FINAL_ANSWER APENAS COM O PLANO. VOCÊ DEVE ESCREVER O CÓDIGO DOS TEST
 
         await loop.run(user_input, system_prompt)
 
-
     async def _gerar_relatorio_final(self, user_id: int):
         import logging
         import subprocess
@@ -789,7 +810,7 @@ NÃO DÊ FINAL_ANSWER APENAS COM O PLANO. VOCÊ DEVE ESCREVER O CÓDIGO DOS TEST
         resultado_testes = await git_tool.execute(
             action="run_tests", repo_path=contexto.repo_path
         )
-        
+
         resumo = self._extrair_resumo_coverage(resultado_testes)
 
         repo_full_path = os.path.join(settings.BASE_DIR, contexto.repo_path)
@@ -920,7 +941,9 @@ NÃO DÊ FINAL_ANSWER APENAS COM O PLANO. VOCÊ DEVE ESCREVER O CÓDIGO DOS TEST
 💡 Os testes foram implementados conforme o plano e o registro salvo no projeto.
 """
 
-        await TelegramOutputHandler.send_response(contexto.chat_id, relatorio, parse_mode="HTML")
+        await TelegramOutputHandler.send_response(
+            contexto.chat_id, relatorio, parse_mode="HTML"
+        )
 
         contexto.estado = TesteEstado.FINALIZADO
 
@@ -976,6 +999,8 @@ NÃO DÊ FINAL_ANSWER APENAS COM O PLANO. VOCÊ DEVE ESCREVER O CÓDIGO DOS TEST
         json_log_path = os.path.join(
             settings.BASE_DIR, contexto.repo_path, "qagent_metrics_log.json"
         )
+
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
 
         with open(template_path, "r", encoding="utf-8") as f:
             template_content = f.read()
