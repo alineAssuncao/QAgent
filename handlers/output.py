@@ -9,7 +9,7 @@ import edge_tts
 
 class TelegramOutputHandler:
     @staticmethod
-    async def send_response(chat_id: int, text: str, requires_audio: bool = False, reply_markup: types.InlineKeyboardMarkup = None):
+    async def send_response(chat_id: int, text: str, requires_audio: bool = False, reply_markup: types.InlineKeyboardMarkup = None, parse_mode=None):
         """Define a melhor estratégia de envio (Texto ou Áudio/Voz)."""
         
         if requires_audio:
@@ -17,10 +17,10 @@ class TelegramOutputHandler:
             if reply_markup: # Enviar botões separadamente se for áudio
                 await bot.send_message(chat_id, "Opções disponíveis:", reply_markup=reply_markup)
         else:
-            await TelegramOutputHandler._send_text_chunks(chat_id, text, reply_markup=reply_markup)
+            await TelegramOutputHandler._send_text_chunks(chat_id, text, reply_markup=reply_markup, parse_mode=parse_mode)
 
     @staticmethod
-    async def _send_text_chunks(chat_id: int, text: str, reply_markup: types.InlineKeyboardMarkup = None):
+    async def _send_text_chunks(chat_id: int, text: str, reply_markup: types.InlineKeyboardMarkup = None, parse_mode=None):
         """Divide o texto em chunks de 4096 caracteres para respeitar o limite do Telegram."""
         limit = 4096
         chunks = [text[i:i+limit] for i in range(0, len(text), limit)]
@@ -28,7 +28,7 @@ class TelegramOutputHandler:
         for i, chunk in enumerate(chunks):
             # O reply_markup só é enviado no último chunk
             markup = reply_markup if i == len(chunks) - 1 else None
-            await bot.send_message(chat_id, chunk, reply_markup=markup)
+            await bot.send_message(chat_id, chunk, reply_markup=markup, parse_mode=parse_mode)
             
             if len(chunks) > 1:
                 await asyncio.sleep(0.5)

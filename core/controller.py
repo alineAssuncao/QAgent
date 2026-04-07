@@ -16,7 +16,7 @@ from memory.database import Database
 from handlers.input import TelegramInputHandler
 from handlers.output import TelegramOutputHandler
 from aiogram import types
-
+import sys
 
 class TesteEstado(Enum):
     ANALISE = "analise"
@@ -220,29 +220,29 @@ class AgentController:
         self.contextos[user_id] = contexto
 
         try:
-            msg = await message.reply("🔄 **Iniciando análise do repositório...**")
+            msg = await message.reply("🔄 <b>Iniciando análise do repositório...</b>", parse_mode="HTML")
 
             if git_url:
-                await msg.edit_text("📥 **Clonando repositório...**")
+                await msg.edit_text("📥 <b>Clonando repositório...</b>", parse_mode="HTML")
                 from core.tools.git import CloneRepositoryTool
 
                 clone_tool = CloneRepositoryTool()
                 await clone_tool.execute(url=git_url)
                 contexto.repo_name = git_url.split("/")[-1].replace(".git", "")
                 contexto.repo_path = f"projects/{contexto.repo_name}"
-                await msg.edit_text(f"✅ **Repositório clonado:** {contexto.repo_name}")
+                await msg.edit_text(f"✅ <b>Repositório clonado:</b> {contexto.repo_name}", parse_mode="HTML")
             else:
                 contexto.repo_name = local_path or "unknown"
                 contexto.repo_path = f"projects/{contexto.repo_name}"
                 await msg.edit_text(
-                    f"✅ **Usando repositório local:** {contexto.repo_name}"
+                    f"✅ <b>Usando repositório local:</b> {contexto.repo_name}", parse_mode="HTML"
                 )
 
             await self._analisar_repositorio(msg, contexto, user_id)
 
         except Exception as e:
             logging.error(f"Erro no fluxo de teste unitário: {e}")
-            await TelegramOutputHandler.send_response(chat_id, f"❌ **Erro:** {str(e)}")
+            await TelegramOutputHandler.send_response(chat_id, f"❌ <b>Erro:</b> {str(e)}", parse_mode="HTML")
             if user_id in self.contextos:
                 del self.contextos[user_id]
 
@@ -254,13 +254,13 @@ class AgentController:
 
         from core.tools.skills import SkillActivationTool
 
-        await msg.edit_text("🔍 **Analisando estrutura do repositório...**")
+        await msg.edit_text("🔍 <b>Analisando estrutura do repositório...</b>", parse_mode="HTML")
 
         list_tool = ListDirectoryTool()
         estrutura = await list_tool.execute(path=contexto.repo_path)
         contexto.estrutura = estrutura
 
-        await msg.edit_text("🛠️ **Detectando frameworks de teste...**")
+        await msg.edit_text("🛠️ <b>Detectando frameworks de teste...</b>", parse_mode="HTML")
 
         git_tool = GitManagementTool()
         frameworks = await git_tool.execute(
@@ -272,34 +272,35 @@ class AgentController:
             await msg.delete()
             await TelegramOutputHandler.send_response(
                 contexto.chat_id,
-                f"""❌ **Projeto não elegível para testes unitários**
+                f"""❌ <b>Projeto não elegível para testes unitários</b>
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━
+                ━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-🏷️ **Projeto:** {contexto.repo_name}
+                🏷️ <b>Projeto:</b> {contexto.repo_name}
 
-🗣️ **Linguagem detectada:** {self._extrair_linguagem(frameworks)}
+                🗣️ <b>Linguagem detectada:</b> {self._extrair_linguagem(frameworks)}
 
-⚠️ **Motivo:** O projeto não possui uma linguagem de programação detectada ou não possui arquivos fonte compatíveis com testes unitários automatizados.
+                ⚠️ <b>Motivo:</b> O projeto não possui uma linguagem de programação detectada ou não possui arquivos fonte compatíveis com testes unitários automatizados.
 
-📝 **O que isso significa:**
-• O repositório pode não ter código fonte (apenas文档ação, configurações, etc.)
-• A linguagem utilizada pode não ser suportada para automação de testes unitários
-• Pode ser um projeto de infraestrutura, configuração ou sem código executável
+                📝 <b>O que isso significa:</b>
+                • O repositório pode não ter código fonte (apenas文档ação, configurações, etc.)
+                • A linguagem utilizada pode não ser suportada para automação de testes unitários
+                • Pode ser um projeto de infraestrutura, configuração ou sem código executável
 
-💡 **Sugestão:**
-• Verifique se o repositório contém código fonte
-• Considere usar testes de integração para este projeto
-• Este projeto pode precisar de abordagem manual de QA
+                💡 <b>Sugestão:</b>
+                • Verifique se o repositório contém código fonte
+                • Considere usar testes de integração para este projeto
+                • Este projeto pode precisar de abordagem manual de QA
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━
-""",
+                ━━━━━━━━━━━━━━━━━━━━━━━━━━
+                """,
+                parse_mode="HTML"
             )
             if user_id in self.contextos:
                 del self.contextos[user_id]
             return
 
-        await msg.edit_text("📊 **Executando testes atuais para medir cobertura...**")
+        await msg.edit_text("📊 <b>Executando testes atuais para medir cobertura...</b>", parse_mode="HTML")
 
         resultado_testes = await git_tool.execute(
             action="run_tests", repo_path=contexto.repo_path
@@ -312,32 +313,32 @@ class AgentController:
 
         await msg.delete()
 
-        relatorio = f"""📊 **RELATÓRIO DE ANÁLISE**
+        relatorio = f"""📊 <b>RELATÓRIO DE ANÁLISE</b>
 
- ━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━
 
- 🏷️ **Nome do Projeto:** {contexto.repo_name}
+🏷️ <b>Nome do Projeto:</b> {contexto.repo_name}
 
- 📈 **Cobertura de Testes Atual:** {contexto.cobertura_inicial}
+📈 <b>Cobertura de Testes Atual:</b> {contexto.cobertura_inicial}
 
- 🗣️ **Linguagem de Programação:**
- {self._extrair_linguagem(contexto.frameworks)}
+🗣️ <b>Linguagem de Programação:</b>
+{self._extrair_linguagem(contexto.frameworks)}
 
- 🔧 **Ferramentas para Testes Unitários:**
- {self._extrair_frameworks(contexto.frameworks)}
+🔧 <b>Ferramentas para Testes Unitários:</b>
+{self._extrair_frameworks(contexto.frameworks)}
 
- ⚠️ **Pré-Requisitos Necessários:**
- {self._extrair_prerequisitos(contexto.frameworks)}
+⚠️ <b>Pré-Requisitos Necessários:</b>
+{self._extrair_prerequisitos(contexto.frameworks)}
 
- 💡 **O que pode ser melhorado para 100% de cobertura:**
- {contexto.recomendacoes}
+💡 <b>O que pode ser melhorado para 100% de cobertura:</b>
+{contexto.recomendacoes}
 
- ━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━━━━━━━
 
- ✅ **Iniciando a criação automática dos testes unitários...**
- """
+✅ <b>Iniciando a criação automática dos testes unitários...</b>
+"""
 
-        await TelegramOutputHandler.send_response(contexto.chat_id, relatorio)
+        await TelegramOutputHandler.send_response(contexto.chat_id, relatorio, parse_mode="HTML")
 
         await self._continuar_execucao(user_id)
 
@@ -363,6 +364,69 @@ class AgentController:
             return "~10-30% (execução OK, cobertura não medida)"
 
         return "Não detectada"
+
+    def _indicador(self, percentual: int) -> str:
+        if percentual < 70:
+            return "🔴"
+        elif percentual < 85:
+            return "🟡"
+        else:
+            return "🟢"
+
+
+    def _extrair_resumo_coverage(self,texto: str) -> str:
+        padrao = re.compile(
+            r"^(?P<name>\S+\.py|TOTAL)\s+"
+            r"(?P<stmts>\d+)\s+"
+            r"(?P<miss>\d+)\s+"
+            r"(?P<cover>\d+%)",
+            re.MULTILINE
+        )
+
+        resultados = padrao.findall(texto)
+
+        if not resultados:
+            return "⚠️ <b>Nenhuma informação de coverage encontrada.</b>"
+
+        linhas = []
+        total_info = None
+
+        for name, stmts, miss, cover in resultados:
+            percentual = int(cover.replace("%", ""))
+            bolinha = self._indicador(percentual)
+            barra = self.gerar_barra(percentual)
+
+            if name == "TOTAL":
+                total_info = (stmts, miss, cover, bolinha)
+                continue
+
+            linhas.append(
+                f"{bolinha} <b>{name}</b>\n"
+                f"Cobertura: {barra} \n"
+                f"Total de linhas: {stmts}\n"
+                f"Linhas não cobertas: {miss}\n"
+            )
+
+        mensagem = "📊 <b>Resumo de Cobertura</b>\n\n"
+        mensagem += "\n".join(linhas)
+
+        if total_info:
+            stmts, miss, cover, bolinha = total_info
+            mensagem += (
+                "\n━━━━━━━━━━━━━━\n"
+                f"{bolinha} <b>COBERTURA GERAL</b>\n"
+                f"Cobertura: {barra}\n"
+                f"Total de linhas: {stmts}\n"
+                f"Linhas não cobertas: {miss}"
+            )
+
+        return mensagem
+
+    def gerar_barra(self, percentual: int) -> str:
+        blocos_total = 10
+        preenchidos = round((percentual / 100) * blocos_total)
+        barra = "█" * preenchidos + "░" * (blocos_total - preenchidos)
+        return f"<code>{barra}</code> {percentual}%"
 
     def _gerar_recomendacoes(self, estrutura: str, frameworks: str) -> str:
         recomendacoes = []
@@ -430,7 +494,7 @@ class AgentController:
         contexto.erro_encontrado = False
 
         await TelegramOutputHandler.send_response(
-            contexto.chat_id, "🚀 **Iniciando implementação dos testes unitários...**"
+            contexto.chat_id, "🚀 <b>Iniciando implementação dos testes unitários...</b>", parse_mode="HTML"
         )
 
         contexto.progresso_task = asyncio.create_task(
@@ -447,14 +511,15 @@ class AgentController:
 
         except asyncio.CancelledError:
             await TelegramOutputHandler.send_response(
-                contexto.chat_id, "❌ **Execução cancelada pelo usuário.**"
+                contexto.chat_id, "❌ <b>Execução cancelada pelo usuário.</b>", parse_mode="HTML"
             )
         except Exception as e:
             logging.error(f"Erro na implementação: {e}")
             contexto.erro_encontrado = True
             await TelegramOutputHandler.send_response(
-                contexto.chat_id, f"❌ **Erro durante implementação:** {str(e)}"
+                contexto.chat_id, f"❌ <b>Erro durante implementação:</b> {str(e)}", parse_mode="HTML"
             )
+            raise e
         finally:
             if user_id in self.contextos:
                 if contexto.progresso_task and not contexto.progresso_task.done():
@@ -477,9 +542,10 @@ class AgentController:
 
                 await TelegramOutputHandler.send_response(
                     contexto.chat_id,
-                    f"⏳ **Em andamento há {tempo_decorrido} minutos...**\n\n"
+                    f"⏳  <b>Em andamento há {tempo_decorrido} minutos...</b>\n\n"
                     "Os testes unitários ainda estão sendo implementados.\n"
                     "Aguarde mais um momento por favor.",
+                    parse_mode="HTML"
                 )
 
         except asyncio.CancelledError:
@@ -512,40 +578,40 @@ class AgentController:
 
         system_prompt = f"""Você é o QAgent, especialista em QA e TESTES UNITÁRIOS.
 
-Tarefa: Criar um plano de testes unitários e implementá-los usando as Ferramentas fornecidas.
+                    Tarefa: Criar um plano de testes unitários e implementá-los usando as Ferramentas fornecidas.
 
-CONTEXTO:
-- Repositório: {contexto.repo_path}
-- Estrutura: {contexto.estrutura}
-- Frameworks: {contexto.frameworks}
+                    CONTEXTO:
+                    - Repositório: {contexto.repo_path}
+                    - Estrutura: {contexto.estrutura}
+                    - Frameworks: {contexto.frameworks}
 
-REGRAS ESTritas:
-1. Você NÃO PODE dar FINAL_ANSWER sem antes agir e usar as ferramentas.
-2. Use a ferramenta 'list_directory' ou 'read_file' para entender os arquivos fonte.
-3. Use a ferramenta 'write_file' para salvar os testes unitários.
-4. Use a ferramenta 'git_manage' com action='run_tests' para validar os testes.
+                    REGRAS ESTritas:
+                    1. Você NÃO PODE dar FINAL_ANSWER sem antes agir e usar as ferramentas.
+                    2. Use a ferramenta 'list_directory' ou 'read_file' para entender os arquivos fonte.
+                    3. Use a ferramenta 'write_file' para salvar os testes unitários.
+                    4. Use a ferramenta 'git_manage' com action='run_tests' para validar os testes.
 
-PASSO 1 - PLANO:
-Crie um arquivo .md com as tasks de testes a serem criadas. Use a ferramenta 'write_file'.
-Arquivo deve ser salvo em: {tasks_md_path}
+                    PASSO 1 - PLANO:
+                    Crie um arquivo .md com as tasks de testes a serem criadas. Use a ferramenta 'write_file'.
+                    Arquivo deve ser salvo em: {tasks_md_path}
 
-Formato do arquivo .md:
-# Plano de Testes Unitários
+                    Formato do arquivo .md:
+                    # Plano de Testes Unitários
 
-## Tasks de Teste
-1. [ ] Testar classe X - método Y
-2. [ ] Testar função Z
+                    ## Tasks de Teste
+                    1. [ ] Testar classe X - método Y
+                    2. [ ] Testar função Z
 
-PASSO 2 - IMPLEMENTAÇÃO:
-Leia os arquivos fonte (read_file) e crie/salve os arquivos de teste correspondentes no diretório correto (write_file).
+                    PASSO 2 - IMPLEMENTAÇÃO:
+                    Leia os arquivos fonte (read_file) e crie/salve os arquivos de teste correspondentes no diretório correto (write_file).
 
-PASSO 3 - EXECUÇÃO:
-Execute os testes usando a ferramenta 'git_manage' com action='run_tests'.
-Apenas depois disso você pode responder com FINAL_ANSWER.
+                    PASSO 3 - EXECUÇÃO:
+                    Execute os testes usando a ferramenta 'git_manage' com action='run_tests'.
+                    Apenas depois disso você pode responder com FINAL_ANSWER.
 
-Ambiente: Windows
-Base: {settings.BASE_DIR}
-"""
+                    Ambiente: {"Windows" if sys.platform == "win32" else "Linux"}
+                    Base: {settings.BASE_DIR}
+                    """
 
         conversation_id = await MessageRepository.get_or_create_conversation(
             contexto.user_id
@@ -570,6 +636,7 @@ Crie testes unitários para o repositório {contexto.repo_path}. O caminho dos a
 
         await loop.run(user_input, system_prompt)
 
+
     async def _gerar_relatorio_final(self, user_id: int):
         contexto = self.contextos.get(user_id)
         if not contexto:
@@ -581,6 +648,8 @@ Crie testes unitários para o repositório {contexto.repo_path}. O caminho dos a
         resultado_testes = await git_tool.execute(
             action="run_tests", repo_path=contexto.repo_path
         )
+        
+        resumo = self._extrair_resumo_coverage(resultado_testes)
 
         cobertura_final = self._extrair_cobertura(resultado_testes)
         contexto.cobertura_final = cobertura_final
@@ -608,42 +677,42 @@ Crie testes unitários para o repositório {contexto.repo_path}. O caminho dos a
 - **Cobertura Inicial:** {contexto.cobertura_inicial}
 - **Cobertura Final:** {contexto.cobertura_final}
 
-## Plano de Testes Executado (Resumo de Tasks)
-{tasks_info}
-"""
+                                ## Plano de Testes Executado (Resumo de Tasks)
+                                {tasks_info}
+                                """
         try:
             with open(caminho_relatorio_projeto, 'w', encoding='utf-8') as f:
                 f.write(conteudo_relatorio)
         except Exception as e:
             logging.error(f"Erro ao salvar o relatório dentro do projeto: {e}")
 
-        relatorio = f"""✅ **TESTES UNITÁRIOS CONCLUÍDOS**
+        relatorio = f"""✅ <b>TESTES UNITÁRIOS CONCLUÍDOS</b>
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━
 
-🏷️ **Nome do Projeto:** {contexto.repo_name}
+🏷️ <b>Nome do Projeto:</b> {contexto.repo_name}
 
-📊 **Cobertura Inicial:** {contexto.cobertura_inicial}
+{resumo}
 
-📈 **Cobertura Final:** {contexto.cobertura_final}
+⏱️ <b>Tempo Total:</b> {tempo_total} minutos
 
-⏱️ **Tempo Total:** {tempo_total} minutos
-
-📝 **Resumo do que foi feito:**
+📝 <b>Resumo do que foi feito:</b>
 • Análise da estrutura do repositório
 • Detecção de frameworks de teste
 • Implementação dos testes unitários
 • Execução e validação dos testes
-• 📑 **Relatório detalhado exportado em:** `{contexto.repo_path}/relatorio_testes_qagent.md`
+• 📑 <b>Relatório detalhado exportado em:</b>
+{contexto.repo_path}/relatorio_testes_qagent.md
 
-📁 **Arquivos de código criados em:** {contexto.repo_path}
+📁 <b>Arquivos de código criados em:</b>
+{contexto.repo_path}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━
 
 💡 Os testes foram implementados conforme o plano e o registro salvo no projeto.
 """
 
-        await TelegramOutputHandler.send_response(contexto.chat_id, relatorio)
+        await TelegramOutputHandler.send_response(contexto.chat_id, relatorio, parse_mode="HTML")
 
         contexto.estado = TesteEstado.FINALIZADO
 
