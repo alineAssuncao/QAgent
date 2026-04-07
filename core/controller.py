@@ -707,9 +707,47 @@ _Acompanhe o progresso em tempo real._"""
         except Exception as e:
             logging.error(f"Erro na implementação: {e}")
             contexto.erro_encontrado = True
+
+            erro_msg = str(e)
+            if (
+                "402" in erro_msg
+                or "Payment Required" in erro_msg
+                or "Insufficient Balance" in erro_msg
+            ):
+                mensagem_amigavel = """❌ <b>Ops! Problema de crédito</b>
+
+━━━━━━━━━━━━━━━━━━━━
+Seu crédito de API esgotou. Para continuar:
+
+💳 <b>Opção 1:</b> Adicione créditos no DeepSeek
+🌐 <b>Opção 2:</b> Configure outro provedor no .env
+🔑 <b>Opção 3:</b> Verifique sua chave da API
+
+━━━━━━━━━━━━━━━━━━━━
+O teste foi cancelado por falta de crédito."""
+            elif "429" in erro_msg or "Too Many Requests" in erro_msg:
+                mensagem_amigavel = """❌ <b>Ops! Many requests</b>
+
+━━━━━━━━━━━━━━━━━━━━
+Os provedores de IA estão com limite excedido no momento.
+
+⏱️ <b>Aguarde alguns minutos</b> e tente novamente.
+━━━━━━━━━━━━━━━━━━━━
+O teste foi cancelado temporariamente."""
+            elif "RateLimitError" in erro_msg:
+                mensagem_amigavel = """❌ <b>Limite de requisições atingido</b>
+
+━━━━━━━━━━━━━━━━━━━━
+Você atingiu o limite de requests. Aguarde um momento e tente novamente.
+
+⏱️ <b>Dica:</b> O limite deve ser resetado em alguns minutos.
+━━━━━━━━━━━━━━━━━━━━"""
+            else:
+                mensagem_amigavel = f"❌ <b>Erro durante implementação:</b> {str(e)}"
+
             await TelegramOutputHandler.send_response(
                 contexto.chat_id,
-                f"❌ <b>Erro durante implementação:</b> {str(e)}",
+                mensagem_amigavel,
                 parse_mode="HTML",
             )
             raise e
