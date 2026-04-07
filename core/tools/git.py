@@ -42,15 +42,14 @@ class CloneRepositoryTool(BaseTool):
 
         if os.path.exists(target_dir):
             logging.info(
-                f"Repositório {folder_name} já existe. Forçando atualização limpa..."
+                f"Repositório {folder_name} já existe. Atualizando com pull..."
             )
             try:
+                await self._run_git_command(["git", "-C", target_dir, "fetch"])
                 await self._run_git_command(
-                    ["git", "-C", target_dir, "reset", "--hard"]
+                    ["git", "-C", target_dir, "reset", "--hard", "HEAD"]
                 )
-                await self._run_git_command(["git", "-C", target_dir, "clean", "-fd"])
-                await self._run_git_command(["git", "-C", target_dir, "pull"])
-                return f"Sucesso: O repositório já existia em '{os.path.relpath(target_dir, settings.BASE_DIR)}', foi limpo e atualizado."
+                return f"Sucesso: O repositório já existia em '{os.path.relpath(target_dir, settings.BASE_DIR)}', foi atualizado com git fetch + reset --hard HEAD."
             except Exception as e:
                 return f"Erro ao atualizar repositório existente: {str(e)}"
 

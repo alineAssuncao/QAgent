@@ -20,9 +20,16 @@ O QAgent evoluiu de um simples bot de chat para um **Agente Autônomo** com capa
     1.  **Detecção Automática**: Links Git ativam o fluxo de análise.
     2.  **Planejamento**: O Agente gera um plano de testes e espera a **aprovação do usuário** via botões.
     3.  **Implementação**: Criação automática de testes unitários após aprovação.
-    4.  **Finalização**: Opções interativas para **Rodar Testes**, **Commit**, **Push** e **Limpeza**.
+    4.  **Relatório Visual V3**: Geração automática de um Dashboard autossuficiente (`qa_coverage_dashboard.html`) com métricas hiper-densas, histórico de tendências e suporte multi-idioma (EN/PT-BR).
+    5.  **Finalização**: Opções interativas para **Commit**, **Push** e **Limpeza**.
 
-## ⚡ Comandos Universais (Anytime)
+## 📊 Dashboard Visual (Data-Dense Reporting)
+
+O QAgent gera agora um relatório técnico avançado inspirado em painéis de analytics profissionais:
+- **Universal Parser**: O Agente lê a saída bruta do terminal (Stdout) e entende automaticamente o formato dos testes (Pytest, Jest, JUnit).
+- **Independente**: O arquivo `.html` gerado na pasta do projeto funciona standalone (não requer servidor para visualização).
+- **Persistência de Histórico**: As métricas de execuções passadas são mantidas nos gráficos de linha para análise de evolução de qualidade.
+- **Insights por IA**: Observações críticas sobre a arquitetura e riscos detectados durante a suíte de testes.
 O QAgent responde a comandos de controle mesmo enquanto está processando uma tarefa pesada:
 -   **"cancelar" / "parar"**: Abre o menu de interrupção imediata da tarefa atual.
 -   **"fila" / "status"**: Exibe o estado atual da fila de tarefas e permite gerenciá-la.
@@ -47,9 +54,10 @@ O QAgent responde a comandos de controle mesmo enquanto está processando uma ta
 ## ⚙️ Configuração Rápida
 
 1. Clone o repositório.
-2. Instale as dependências: `pip install -r requirements.txt`.
-3. Configure o arquivo `.env` (veja `.env.example`).
-4. Execute o bot: `python main.py`.
+2. Instale as dependências: `pip install -r requirements.txt`. (Requer ambiente com Python >= 3.11).
+3. **Módulos de Teste**: Certifique-se de ter o `pytest` e `pytest-cov` instalados para o funcionamento pleno dos runners Python.
+4. Configure o arquivo `.env` (veja `.env.example`).
+5. Execute o bot: `python main.py`.
 
 ## 📄 Documentação
 

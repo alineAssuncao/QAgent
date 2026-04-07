@@ -1,0 +1,920 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>QAgent • Visual Test Report V3</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+        :root {
+            --bg-main: #202124;
+            --header-bg: #323639;
+            --subheader-bg: #4a6279;
+            --inner-card-bg: #3c4043;
+            --text-main: #ffffff;
+            --text-dim: #9aa0a6;
+            --blue: #669df6;
+            --green: #81c995;
+            --red: #f28b82;
+            --yellow: #fbbc04;
+            --border-color: #5f6368;
+            --font-main: 'Roboto', sans-serif;
+        }
+
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            font-family: var(--font-main);
+        }
+
+        /* Top Header */
+        .header {
+            background-color: var(--header-bg);
+            padding: 12px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid var(--bg-main);
+        }
+
+        .logo {
+            display: flex;
+            align-items: center;
+            font-size: 1.2rem;
+            font-weight: 500;
+        }
+
+        .logo-icon {
+            color: var(--blue);
+            margin-right: 10px;
+            font-size: 1.4rem;
+        }
+
+        .header-controls {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+
+        .date-range {
+            font-size: 1.1rem;
+            color: var(--text-dim);
+            font-weight: 400;
+        }
+
+        .lang-select {
+            background-color: transparent;
+            color: var(--text-main);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 4px 8px;
+            font-family: var(--font-main);
+            cursor: pointer;
+            outline: none;
+        }
+        
+        .lang-select option {
+            background-color: var(--header-bg);
+            color: var(--text-main);
+        }
+
+        /* Sub Header */
+        .subheader {
+            background-color: var(--subheader-bg);
+            padding: 8px 24px;
+            font-size: 1.1rem;
+            color: #fff;
+        }
+
+        .dashboard-container {
+            padding: 20px 24px;
+        }
+
+        /* Section Title & Tooltips */
+        .section-title {
+            font-size: 1.3rem;
+            font-weight: 600;
+            margin-bottom: 2px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .info-wrapper {
+            position: relative;
+            display: inline-block;
+            margin-left: 10px;
+        }
+
+        .info-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            border: 1.5px solid var(--text-dim);
+            color: var(--text-dim);
+            font-size: 10px;
+            font-weight: bold;
+            font-family: monospace;
+            cursor: help;
+        }
+        
+        .info-icon:hover {
+            color: var(--text-main);
+            border-color: var(--text-main);
+        }
+
+        .info-tooltip {
+            visibility: hidden;
+            width: 240px;
+            background-color: #26282b;
+            color: #fff;
+            text-align: left;
+            border: 1px solid var(--border-color);
+            border-radius: 6px;
+            padding: 10px;
+            position: absolute;
+            z-index: 10;
+            bottom: 125%; 
+            left: 50%; 
+            margin-left: -120px;
+            opacity: 0;
+            transition: opacity 0.2s;
+            font-size: 0.8rem;
+            font-weight: 400;
+            line-height: 1.4;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.5);
+            font-family: var(--font-main);
+        }
+        
+        /* Triangle indicator for tooltip */
+        .info-tooltip::after {
+            content: "";
+            position: absolute;
+            top: 100%;
+            left: 50%;
+            margin-left: -5px;
+            border-width: 5px;
+            border-style: solid;
+            border-color: var(--border-color) transparent transparent transparent;
+        }
+
+        .info-wrapper:hover .info-tooltip {
+            visibility: visible;
+            opacity: 1;
+        }
+
+        .section-subtitle {
+            font-size: 0.85rem;
+            color: var(--text-dim);
+            margin-bottom: 15px;
+            display: block;
+        }
+
+        /* Top Row Groupings */
+        .top-row {
+            display: flex;
+            gap: 20px;
+            justify-content: space-between;
+            margin-bottom: 30px;
+        }
+
+        .kpi-group {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Mini KPI Cards row */
+        .kpi-cards {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .kpi-card {
+            background-color: var(--inner-card-bg);
+            flex: 1;
+            padding: 12px;
+            border-bottom: 3px solid transparent;
+        }
+        
+        .kpi-card[data-active="true"] {
+            border-bottom-color: var(--blue);
+        }
+
+        .kpi-label {
+            font-size: 0.8rem;
+            color: var(--text-dim);
+            margin-bottom: 8px;
+            text-transform: capitalize;
+            height: 16px;
+        }
+
+        .kpi-value {
+            font-size: 1.8rem;
+            font-weight: 500;
+            margin-bottom: 5px;
+        }
+
+        .kpi-delta {
+            font-size: 0.8rem;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .delta-up { color: var(--green); }
+        .delta-down { color: var(--red); }
+
+        /* Chart Containers */
+        .line-chart-container {
+            height: 200px;
+            width: 100%;
+        }
+
+        /* Divider */
+        hr {
+            border: 0;
+            border-top: 1px solid var(--border-color);
+            margin: 30px 0;
+        }
+
+        /* Bottom Row */
+        .bottom-row {
+            display: flex;
+            gap: 40px;
+            align-items: flex-start;
+        }
+
+        /* Table Styles */
+        .table-section {
+            flex: 1.3;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.9rem;
+            text-align: left;
+        }
+
+        th {
+            color: var(--text-dim);
+            padding: 10px;
+            border-bottom: 1px solid var(--border-color);
+            font-weight: 500;
+        }
+
+        td {
+            padding: 10px;
+            border-bottom: 1px solid #323639;
+        }
+        
+        tr:nth-child(even) {
+            background-color: #26282b;
+        }
+
+        tr:hover {
+            background-color: var(--inner-card-bg);
+        }
+
+        .td-delta {
+            font-weight: 600;
+        }
+
+        /* Doughnuts Section */
+        .doughnuts-section {
+            flex: 1;
+        }
+
+        .doughnuts-wrapper {
+            display: flex;
+            justify-content: space-around;
+            align-items: center;
+            height: 200px;
+            margin-top: 20px;
+        }
+
+        .doughnut-item {
+            width: 120px;
+            text-align: center;
+        }
+
+        .doughnut-label {
+            margin-top: 15px;
+            font-size: 0.9rem;
+            color: var(--text-main);
+        }
+
+        /* Legend */
+        .custom-legend {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            margin-bottom: -15px;
+            font-size: 0.8rem;
+        }
+        
+        .legend-item { display: flex; align-items: center; gap: 4px; }
+        .legend-color { width: 12px; height: 2px; }
+
+        /* Insights Section */
+        .insights-section {
+            flex: 1;
+            margin-top: 30px;
+        }
+
+        .insights-card {
+            background-color: var(--inner-card-bg);
+            padding: 24px;
+            border-left: 4px solid var(--blue);
+            margin-top: 15px;
+        }
+
+        .insights-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .insights-list li {
+            position: relative;
+            padding-left: 24px;
+            margin-bottom: 15px;
+            line-height: 1.5;
+            color: #e8eaed;
+            font-size: 0.95rem;
+        }
+        
+        .insights-list li:last-child {
+            margin-bottom: 0;
+        }
+
+        .insights-list li::before {
+            content: "❯";
+            position: absolute;
+            left: 0;
+            color: var(--yellow);
+            font-weight: bold;
+        }
+
+    </style>
+</head>
+<body>
+
+    <script>
+        const __QA_DATA__ = {
+            "metadata": {
+                "run_id": "QA-RUN-8849-BETA",
+                "timestamp": "2026-04-04T12:00:00Z",
+                "branch": "feature/automated-testing"
+            },
+            "coverage": {
+                "before": 42.50,
+                "after": 86.20,
+                "delta_absolute": 43.70,
+                "delta_percentual": 102.82
+            },
+            "tests": {
+                "total_created": 45,
+                "total_executed": 128,
+                "failures": 0
+            },
+            "performance": {
+                "generation_time_seconds": 18.5,
+                "execution_time_seconds": 4.2
+            },
+            "breakdown": [
+                { "module": "Module - api.routes.users", "coverage_before": 20.0, "coverage_after": 95.0, "delta": 75.0 },
+                { "module": "Module - core.security", "coverage_before": 50.0, "coverage_after": 100.0, "delta": 50.0 },
+                { "module": "Module - database.models", "coverage_before": 80.0, "coverage_after": 85.0, "delta": 5.0 },
+                { "module": "Module - services.payment", "coverage_before": 10.0, "coverage_after": 75.0, "delta": 65.0 },
+                { "module": "Module - utils.helpers", "coverage_before": 30.0, "coverage_after": 80.0, "delta": 50.0 }
+            ],
+            "insights": {
+                "en": [
+                    "Module 'api.routes.users' showed the greatest resilience gain, effectively mitigating unhandled 500 exceptions.",
+                    "Coverage in 'core.security' reached 100%, significantly reducing the risk surface of JWT vulnerabilities.",
+                    "Zero failures identified in the extended suite, validating the stability of the current implementation under 128 concurrent tests.",
+                    "Recommended to focus the next QA cycle on module 'database.models' which stagnated around 85% due to non-testable abstract methods."
+                ],
+                "pt": [
+                    "O módulo 'api.routes.users' apresentou o maior ganho de resiliência, mitigando potenciais exceções 500 não tratadas.",
+                    "A cobertura em 'core.security' atingiu 100%, reduzindo significativamente a superfície de risco de vulnerabilidades JWT.",
+                    "Zero falhas identificadas na bateria estendida, validando estabilidade da atual implementação sob 128 testes simultâneos.",
+                    "Recomendado alocar próximo ciclo de QA no módulo 'database.models' que estagnou próximo dos 85% devido a métodos abstratos não testáveis."
+                ]
+            },
+            history_trend: {
+                labels: ["Nov 1", "Nov 2", "Nov 3", "Nov 4", "Nov 5", "Nov 6", "Nov 7", "Nov 8", "Nov 9", "Nov 10", "Nov 11", "Nov 12", "Nov 13", "Nov 14"],
+                cov_before: [40, 41, 39, 42, 42, 42, 42.5, 42.5, 42.5, 42.5, 42.5, 42.5, 42.5, 42.5],
+                cov_after: [40, 41, 39, 42, 42, 70, 75, 78, 80, 81, 80, 83, 85, 86.2],
+                tests_exec: [60, 62, 60, 65, 65, 90, 100, 105, 110, 115, 115, 120, 125, 128],
+                tests_fail: [2, 1, 3, 0, 0, 5, 2, 1, 0, 0, 1, 0, 0, 0],
+                gen_time: [0, 0, 0, 0, 0, 8.5, 10.2, 12.0, 14.1, 15.0, 15.2, 16.5, 17.0, 18.5],
+                exec_time: [2.1, 2.2, 2.0, 2.4, 2.4, 3.1, 3.5, 3.8, 4.0, 4.2, 4.1, 4.2, 4.3, 4.2]
+            }
+        };
+
+        const i18n = {
+            en: {
+                title_logo: "QAgent Analytics",
+                subheader: "Overview",
+                g1_title: "Coverage Rates & Absolute",
+                g1_sub: "by Before Coverage, After Coverage, and Delta",
+                g1_tt: "Displays the system's code coverage percentage before and after QAgent modifications.",
+                lbl_covAfter: "Cov. After",
+                lbl_covBefore: "Cov. Before",
+                lbl_covDelta: "Delta (Abs)",
+                
+                g2_title: "Test Execution & Health",
+                g2_sub: "by Total Tests, Failing, and QAgent Created",
+                g2_tt: "Tracks the total volume of tests executed and directly highlights newly injected tests.",
+                lbl_executed: "Total Executed",
+                lbl_qagent: "QAgent Gen",
+                lbl_fail: "Failures",
+                
+                g3_title: "Agent Performance",
+                g3_sub: "by Generation Time and Execution Time",
+                g3_tt: "Metrics on QAgent generation compute speed vs Pytest execution speed.",
+                lbl_genTime: "Gen Time",
+                lbl_execTime: "Exec Time",
+                
+                tbl_title: "Top Modules",
+                tbl_sub: "by Coverage Delta and Status.",
+                tbl_tt: "Breaks down coverage impact by specific system modules.",
+                th_mod: "Module",
+                th_before: "Before",
+                th_after: "After QAgent",
+                th_delta: "Delta ▼",
+
+                don_title: "QAgent Impact Breakdown",
+                don_sub: "by Module, Duration, and Volume",
+                don_tt: "Proportional distribution of coverage and actions.",
+                d_cov: "Coverage Impact",
+                d_gen: "Generation",
+                d_exec: "Execution",
+
+                ins_title: "AI Engineering Insights",
+                ins_sub: "Critical observations generated by QAgent analysis.",
+                ins_tt: "Highlights potential risks and architectural takeaways based on the latest AI run."
+            },
+            pt: {
+                title_logo: "QAgent Analítico",
+                subheader: "Resumo Geral",
+                g1_title: "Taxas e Absoluto de Cobertura",
+                g1_sub: "por Cobertura Anterior, Posterior e Delta",
+                g1_tt: "Exibe a porcentagem de cobertura do código sistema antes vs depois das modificações do QAgent.",
+                lbl_covAfter: "Cob. Depois",
+                lbl_covBefore: "Cob. Antes",
+                lbl_covDelta: "Delta (Abs)",
+                
+                g2_title: "Execução e Saúde dos Testes",
+                g2_sub: "por Total de Testes, Falhas e Criados pelo Agente",
+                g2_tt: "Acompanha o volume total de testes rodados e evidencia testes recém-injetados.",
+                lbl_executed: "Total Executado",
+                lbl_qagent: "Testes Gerados",
+                lbl_fail: "Falhas Encontradas",
+                
+                g3_title: "Performance do Agent",
+                g3_sub: "por Tempo de Geração e Tempo de Execução",
+                g3_tt: "Métricas de velocidade da computação da Geração pelo Agente vs tempo local de Execução (Pytest/Jest).",
+                lbl_genTime: "T. Geração",
+                lbl_execTime: "T. Execução",
+                
+                tbl_title: "Top Módulos Testados",
+                tbl_sub: "por Delta de Cobertura e Status Base.",
+                tbl_tt: "Detalhamento numérico de impacto isolado por módulos específicos do sistema.",
+                th_mod: "Módulo",
+                th_before: "Antes",
+                th_after: "Depois do QAgent",
+                th_delta: "Delta ▼",
+
+                don_title: "Distribuição e Impacto do Agente",
+                don_sub: "por Cobertura, Duração de Fase e Volume",
+                don_tt: "Distribuição e segmentação percentual de ações de cobertura e processamento.",
+                d_cov: "Impacto de Cobertura",
+                d_gen: "Geração",
+                d_exec: "Execução",
+
+                ins_title: "Insights de Engenharia por IA",
+                ins_sub: "Observações geradas dinamicamente pelas métricas testadas.",
+                ins_tt: "Ressalta riscos da arquitetura, pontos de fragilidade e lições obtidas interpretadas pelo LLM."
+            }
+        };
+
+        // Modified default to Portuguese based on user request!
+        let currentLang = 'pt';
+        let chartInstances = {};
+    </script>
+
+    <!-- Header Area -->
+    <div class="header">
+        <div class="logo">
+            <span class="logo-icon">▲</span> <span data-i18n="title_logo">QAgent Analítico</span>
+        </div>
+        <div class="header-controls">
+            <div class="date-range" id="dom-daterange">
+                Apr 4, 2026 - Apr 4, 2026 ▼
+            </div>
+            <!-- Default select reflects Portuguese -->
+            <select class="lang-select" id="lang-switcher" onchange="changeLanguage(this.value)">
+                <option value="pt" selected>🇧🇷 Português</option>
+                <option value="en">🇺🇸 English</option>
+            </select>
+        </div>
+    </div>
+    <div class="subheader" data-i18n="subheader">
+        Resumo Geral
+    </div>
+
+    <!-- Main Dashboard -->
+    <div class="dashboard-container">
+        
+        <div class="top-row">
+            <!-- Group 1: Coverage -->
+            <div class="kpi-group">
+                <div class="section-title">
+                    <span data-i18n="g1_title">Taxas e Absoluto de Cobertura</span>
+                    <div class="info-wrapper">
+                        <span class="info-icon">i</span>
+                        <div class="info-tooltip" data-i18n="g1_tt">Exibe a porcentagem de cobertura do código sistema antes vs depois das modificações do QAgent.</div>
+                    </div>
+                </div>
+                <div class="section-subtitle" data-i18n="g1_sub">por Cobertura Anterior, Posterior e Delta</div>
+                
+                <div class="kpi-cards">
+                    <div class="kpi-card" data-active="true">
+                        <div class="kpi-label" data-i18n="lbl_covAfter">Cob. Depois</div>
+                        <div class="kpi-value" id="cov-after">0%</div>
+                        <div class="kpi-delta delta-up">⬆ 102.8%</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label" data-i18n="lbl_covBefore">Cob. Antes</div>
+                        <div class="kpi-value" id="cov-before">0%</div>
+                        <div class="kpi-delta delta-up">⬆ 1.2%</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label" data-i18n="lbl_covDelta">Delta (Abs)</div>
+                        <div class="kpi-value" id="cov-delta">0%</div>
+                        <div class="kpi-delta delta-up">⬆ 100%</div>
+                    </div>
+                </div>
+
+                <div class="custom-legend">
+                    <div class="legend-item"><div class="legend-color" style="background:var(--green)"></div><span data-i18n="lbl_covAfter">Cob. Depois</span></div>
+                    <div class="legend-item"><div class="legend-color" style="background:var(--blue)"></div><span data-i18n="lbl_covBefore">Cob. Antes</span></div>
+                </div>
+                <div class="line-chart-container">
+                    <canvas id="chartCov"></canvas>
+                </div>
+            </div>
+
+            <!-- Group 2: Tests Execution -->
+            <div class="kpi-group" style="padding: 0 15px; border-left: 1px solid var(--border-color); border-right: 1px solid var(--border-color);">
+                <div class="section-title">
+                    <span data-i18n="g2_title">Execução e Saúde dos Testes</span>
+                    <div class="info-wrapper">
+                        <span class="info-icon">i</span>
+                        <div class="info-tooltip" data-i18n="g2_tt">Acompanha o volume total de testes rodados e evidencia testes recém-injetados.</div>
+                    </div>
+                </div>
+                <div class="section-subtitle" data-i18n="g2_sub">por Total de Testes, Falhas e Criados pelo Agente</div>
+                
+                <div class="kpi-cards">
+                    <div class="kpi-card" data-active="true">
+                        <div class="kpi-label" data-i18n="lbl_executed">Total Executado</div>
+                        <div class="kpi-value" id="tes-exec">0</div>
+                        <div class="kpi-delta delta-up">⬆ 82.5%</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label" data-i18n="lbl_qagent">Testes Gerados</div>
+                        <div class="kpi-value" id="tes-gen">0</div>
+                        <div class="kpi-delta delta-up">⬆ 100%</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label" data-i18n="lbl_fail">Falhas Encontradas</div>
+                        <div class="kpi-value" id="tes-fail">0</div>
+                        <div class="kpi-delta delta-down">⬇ 0%</div>
+                    </div>
+                </div>
+
+                <div class="custom-legend">
+                    <div class="legend-item"><div class="legend-color" style="background:var(--blue)"></div><span data-i18n="lbl_executed">Total Exec</span></div>
+                    <div class="legend-item"><div class="legend-color" style="background:var(--red)"></div><span data-i18n="lbl_fail">Falhas</span></div>
+                </div>
+                <div class="line-chart-container">
+                    <canvas id="chartTests"></canvas>
+                </div>
+            </div>
+
+            <!-- Group 3: Performance -->
+            <div class="kpi-group" style="padding-left: 15px;">
+                <div class="section-title">
+                    <span data-i18n="g3_title">Performance do Agent</span>
+                    <div class="info-wrapper">
+                        <span class="info-icon">i</span>
+                        <div class="info-tooltip" data-i18n="g3_tt">Métricas de velocidade da computação da Geração pelo Agente vs tempo local de Execução (Pytest/Jest).</div>
+                    </div>
+                </div>
+                <div class="section-subtitle" data-i18n="g3_sub">por Tempo de Geração e Tempo de Execução</div>
+                
+                <div class="kpi-cards">
+                    <div class="kpi-card" data-active="true">
+                        <div class="kpi-label" data-i18n="lbl_genTime">T. Geração</div>
+                        <div class="kpi-value" id="perf-gen">0s</div>
+                        <div class="kpi-delta delta-down">⬇ 15.2%</div>
+                    </div>
+                    <div class="kpi-card" data-active="false">
+                        <div class="kpi-label" data-i18n="lbl_execTime">T. Execução</div>
+                        <div class="kpi-value" id="perf-exec">0s</div>
+                        <div class="kpi-delta delta-up">⬆ 8.4%</div>
+                    </div>
+                </div>
+
+                <div class="custom-legend">
+                    <div class="legend-item"><div class="legend-color" style="background:var(--green)"></div><span data-i18n="lbl_genTime">T. Geração</span></div>
+                    <div class="legend-item"><div class="legend-color" style="background:var(--blue)"></div><span data-i18n="lbl_execTime">T. Execução</span></div>
+                </div>
+                <div class="line-chart-container">
+                    <canvas id="chartPerf"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <hr>
+
+        <div class="bottom-row">
+            <!-- Breaking Down Table -->
+            <div class="table-section">
+                <div class="section-title">
+                    <span data-i18n="tbl_title">Top Módulos Testados</span>
+                    <div class="info-wrapper">
+                        <span class="info-icon">i</span>
+                        <div class="info-tooltip" data-i18n="tbl_tt">Detalhamento numérico de impacto isolado por módulos específicos do sistema.</div>
+                    </div>
+                </div>
+                <div class="section-subtitle" data-i18n="tbl_sub">por Delta de Cobertura e Status Base.</div>
+                
+                <table>
+                    <thead>
+                        <tr>
+                            <th data-i18n="th_mod">Módulo</th>
+                            <th data-i18n="th_before">Antes</th>
+                            <th data-i18n="th_after">Depois do QAgent</th>
+                            <th data-i18n="th_delta">Delta ▼</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dom-table-body">
+                        <!-- injected by JS -->
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Doughnuts Breakdown -->
+            <div class="doughnuts-section">
+                <div class="section-title">
+                    <span data-i18n="don_title">Distribuição e Impacto do Agente</span>
+                    <div class="info-wrapper">
+                        <span class="info-icon">i</span>
+                        <div class="info-tooltip" data-i18n="don_tt">Distribuição e segmentação percentual de ações de cobertura e processamento.</div>
+                    </div>
+                </div>
+                <div class="section-subtitle" data-i18n="don_sub">por Cobertura, Duração de Fase e Volume</div>
+                
+                <div class="doughnuts-wrapper">
+                    <div class="doughnut-item">
+                        <canvas id="donut1" width="100" height="100"></canvas>
+                        <div class="doughnut-label" data-i18n="d_cov">Impacto de Cobertura</div>
+                    </div>
+                    <div class="doughnut-item">
+                        <canvas id="donut2" width="100" height="100"></canvas>
+                        <div class="doughnut-label" data-i18n="d_gen">Geração</div>
+                    </div>
+                    <div class="doughnut-item">
+                        <canvas id="donut3" width="100" height="100"></canvas>
+                        <div class="doughnut-label" data-i18n="d_exec">Execução</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- NEW: Insights Section Brought Back -->
+        <div class="insights-section">
+            <div class="section-title">
+                <span data-i18n="ins_title">Insights de Engenharia por IA</span>
+                <div class="info-wrapper">
+                    <span class="info-icon">i</span>
+                    <div class="info-tooltip" data-i18n="ins_tt">Ressalta riscos da arquitetura, pontos de fragilidade e lições obtidas interpretadas pelo LLM.</div>
+                </div>
+            </div>
+            <div class="section-subtitle" data-i18n="ins_sub">Observações geradas dinamicamente pelas métricas testadas.</div>
+            <div class="insights-card">
+                <ul class="insights-list" id="dom-insights">
+                    <!-- Injected by JS -->
+                </ul>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        const d = __QA_DATA__;
+
+        function populateData() {
+            // Metrics
+            document.getElementById('cov-after').innerText = d.coverage.after.toFixed(1) + "%";
+            document.getElementById('cov-before').innerText = d.coverage.before.toFixed(1) + "%";
+            document.getElementById('cov-delta').innerText = "+" + d.coverage.delta_absolute.toFixed(1) + "";
+            document.getElementById('tes-exec').innerText = d.tests.total_executed;
+            document.getElementById('tes-gen').innerText = d.tests.total_created;
+            document.getElementById('tes-fail').innerText = d.tests.failures;
+            document.getElementById('perf-gen').innerText = d.performance.generation_time_seconds + "s";
+            document.getElementById('perf-exec').innerText = d.performance.execution_time_seconds + "s";
+
+            // Date
+            const dateObj = new Date(d.metadata.timestamp);
+            const options = { month: 'short', day: 'numeric', year: 'numeric' };
+            document.getElementById('dom-daterange').innerText = dateObj.toLocaleDateString("en-US", options) + " - " + dateObj.toLocaleDateString("en-US", options) + " ▼";
+
+            // Table
+            const tbody = document.getElementById('dom-table-body');
+            tbody.innerHTML = '';
+            if (d.breakdown && d.breakdown.length > 0) {
+                const sortedBreakdown = [...d.breakdown].sort((a, b) => (b.delta || 0) - (a.delta || 0));
+                sortedBreakdown.forEach((mod, index) => {
+                    const tr = document.createElement('tr');
+                    const delta = mod.delta || 0;
+                    let deltaColor = delta > 0 ? 'var(--yellow)' : 'var(--text-main)';
+                    const covBefore = mod.coverage_before !== undefined ? mod.coverage_before.toFixed(2) + '%' : 'N/A';
+                    const covAfter = mod.coverage_after !== undefined ? mod.coverage_after.toFixed(2) + '%' : 'N/A';
+                    const displayModule = mod.module || mod.name || 'Module';
+                    tr.innerHTML = `
+                        <td>${index + 1}. &nbsp;&nbsp; ${displayModule}</td>
+                        <td>${covBefore}</td>
+                        <td>${covAfter}</td>
+                        <td class="td-delta" style="color: ${deltaColor}">+${delta.toFixed(2)}%</td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+            } else {
+                tbody.innerHTML = '<tr><td colspan="4" style="text-align:center;color:var(--text-dim)">Nenhum dado de cobertura por módulo disponível</td></tr>';
+            }
+        }
+
+        function renderInsights(lang) {
+            const list = document.getElementById('dom-insights');
+            list.innerHTML = '';
+            d.insights[lang].forEach(item => {
+                const li = document.createElement('li');
+                li.innerText = item;
+                list.appendChild(li);
+            });
+        }
+
+        function createCharts() {
+            Chart.defaults.color = '#9aa0a6';
+            Chart.defaults.font.family = "'Roboto', sans-serif";
+            Chart.defaults.font.size = 11;
+            Chart.defaults.plugins.legend.display = false;
+            Chart.defaults.maintainAspectRatio = false;
+            Chart.defaults.scale.grid.color = 'rgba(255, 255, 255, 0.08)';
+            Chart.defaults.scale.grid.drawBorder = false;
+
+            const commonLineOptions = {
+                responsive: true,
+                interaction: { mode: 'index', intersect: false },
+                elements: { point: { radius: 0, hitRadius: 10, hoverRadius: 4 } },
+                scales: {
+                    x: { grid: { display: false }, ticks: { maxTicksLimit: 6 } },
+                    y: { beginAtZero: true, border: { display: false }, ticks: { maxTicksLimit: 5 } },
+                    y1: { type: 'linear', display: true, position: 'right', beginAtZero: true, grid: { drawOnChartArea: false }, border: { display: false }, ticks: { maxTicksLimit: 5 } }
+                }
+            };
+            const t = d.history_trend;
+
+            chartInstances.chartCov = new Chart(document.getElementById('chartCov'), {
+                type: 'line',
+                data: {
+                    labels: t.labels,
+                    datasets: [
+                        { label: i18n[currentLang].lbl_covAfter, data: t.cov_after, borderColor: '#81c995', borderWidth: 2, tension: 0.1, yAxisID: 'y' },
+                        { label: i18n[currentLang].lbl_covBefore, data: t.cov_before, borderColor: '#669df6', borderWidth: 2, tension: 0.1, yAxisID: 'y' }
+                    ]
+                },
+                options: commonLineOptions
+            });
+
+            chartInstances.chartTests = new Chart(document.getElementById('chartTests'), {
+                type: 'line',
+                data: {
+                    labels: t.labels,
+                    datasets: [
+                        { label: i18n[currentLang].lbl_executed, data: t.tests_exec, borderColor: '#669df6', borderWidth: 2, tension: 0.1, yAxisID: 'y' },
+                        { label: i18n[currentLang].lbl_fail, data: t.tests_fail, borderColor: '#f28b82', borderWidth: 2, tension: 0.1, yAxisID: 'y1' }
+                    ]
+                },
+                options: commonLineOptions
+            });
+
+            chartInstances.chartPerf = new Chart(document.getElementById('chartPerf'), {
+                type: 'line',
+                data: {
+                    labels: t.labels,
+                    datasets: [
+                        { label: i18n[currentLang].lbl_genTime, data: t.gen_time, borderColor: '#81c995', borderWidth: 2, tension: 0.1, yAxisID: 'y' },
+                        { label: i18n[currentLang].lbl_execTime, data: t.exec_time, borderColor: '#669df6', borderWidth: 2, tension: 0.1, yAxisID: 'y1' }
+                    ]
+                },
+                options: commonLineOptions
+            });
+
+            const commonDoughnutOpts = { responsive: false, cutout: '70%', animation: { animateRotate: true } };
+            chartInstances.donut1 = new Chart(document.getElementById('donut1'), { type: 'doughnut', data: { labels: ['A', 'B', 'C'], datasets: [{ data: [69.1, 30.5, 0.4], backgroundColor: ['#fbbc04', '#669df6', '#81c995'], borderWidth: 0 }] }, options: commonDoughnutOpts });
+            chartInstances.donut2 = new Chart(document.getElementById('donut2'), { type: 'doughnut', data: { labels: ['A', 'B', 'C'], datasets: [{ data: [69.9, 29.7, 0.4], backgroundColor: ['#fbbc04', '#669df6', '#3c4043'], borderWidth: 0 }] }, options: commonDoughnutOpts });
+            chartInstances.donut3 = new Chart(document.getElementById('donut3'), { type: 'doughnut', data: { labels: ['A', 'B', 'C'], datasets: [{ data: [47.3, 22.3, 30.4], backgroundColor: ['#669df6', '#fbbc04', '#3c4043'], borderWidth: 0 }] }, options: commonDoughnutOpts });
+        }
+
+        function changeLanguage(lang) {
+            currentLang = lang;
+            const dict = i18n[lang];
+
+            // Update DOM text
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const key = el.getAttribute('data-i18n');
+                if(dict[key]) {
+                    el.innerText = dict[key];
+                }
+            });
+
+            // Update insights
+            renderInsights(lang);
+
+            // Update charts dataset labels
+            if(chartInstances.chartCov) {
+                chartInstances.chartCov.data.datasets[0].label = dict.lbl_covAfter;
+                chartInstances.chartCov.data.datasets[1].label = dict.lbl_covBefore;
+                chartInstances.chartCov.update();
+                
+                chartInstances.chartTests.data.datasets[0].label = dict.lbl_executed;
+                chartInstances.chartTests.data.datasets[1].label = dict.lbl_fail;
+                chartInstances.chartTests.update();
+
+                chartInstances.chartPerf.data.datasets[0].label = dict.lbl_genTime;
+                chartInstances.chartPerf.data.datasets[1].label = dict.lbl_execTime;
+                chartInstances.chartPerf.update();
+            }
+
+            // Update donut charts with distribution data
+            if (d.distribution && chartInstances.donut1) {
+                const cov = d.distribution.coverage_impact;
+                chartInstances.donut1.data.datasets[0].data = [cov.covered, cov.uncovered];
+                chartInstances.donut1.update();
+            }
+            if (d.distribution && chartInstances.donut2) {
+                const test = d.distribution.test_execution;
+                chartInstances.donut2.data.datasets[0].data = [test.passed, test.failed, test.skipped];
+                chartInstances.donut2.update();
+            }
+            if (d.distribution && chartInstances.donut3) {
+                const perf = d.distribution.agent_performance;
+                chartInstances.donut3.data.datasets[0].data = [perf.generation, perf.execution, perf.other];
+                chartInstances.donut3.update();
+            }
+        }
+
+        // Initialize Base
+        populateData();
+        renderInsights(currentLang);
+        createCharts();
+        
+        // Update donut charts with actual data on load
+        if (typeof d !== 'undefined' && d.distribution) {
+            if (chartInstances.donut1 && d.distribution.coverage_impact) {
+                const cov = d.distribution.coverage_impact;
+                chartInstances.donut1.data.datasets[0].data = [cov.covered, cov.uncovered];
+                chartInstances.donut1.update();
+            }
+            if (chartInstances.donut2 && d.distribution.test_execution) {
+                const test = d.distribution.test_execution;
+                chartInstances.donut2.data.datasets[0].data = [test.passed, test.failed, test.skipped];
+                chartInstances.donut2.update();
+            }
+            if (chartInstances.donut3 && d.distribution.agent_performance) {
+                const perf = d.distribution.agent_performance;
+                chartInstances.donut3.data.datasets[0].data = [perf.generation, perf.execution, perf.other];
+                chartInstances.donut3.update();
+            }
+        }
+
+    </script>
+</body>
+</html>

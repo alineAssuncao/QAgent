@@ -6,13 +6,28 @@ from typing import List, Dict, Any, Optional
 from core.config import settings
 from core.middleware import provider_health
 from google import genai
+from google.api_core import exceptions as google_exceptions
+import openai
 from openai import AsyncOpenAI
+
+
+# ══════════════════════════════════════════════════════════════
+# CUSTOM EXCEPTIONS
+# ══════════════════════════════════════════════════════════════
+class RateLimitError(Exception):
+    """Exceção levantada quando um Provedor atinge o limite de cota (429)."""
+
+    def __init__(self, message: str, provider_name: str):
+        super().__init__(message)
+        self.provider_name = provider_name
 
 
 # ══════════════════════════════════════════════════════════════
 # TIMEOUTS (em segundos)
 # ══════════════════════════════════════════════════════════════
-LLM_REQUEST_TIMEOUT = 90  # Timeout por chamada ao LLM
+LLM_REQUEST_TIMEOUT = (
+    180  # Timeout por chamada ao LLM (3 minutos para projetos maiores)
+)
 LLM_CONNECT_TIMEOUT = 10  # Timeout de conexão
 LM_STUDIO_TIMEOUT = 900  # Local é mais lento, timeout maior
 
@@ -135,14 +150,30 @@ class GeminiProvider(BaseProvider):
             )
             return response.text
 
+        except google_exceptions.ResourceExhausted:
+            raise RateLimitError(f"Limite de cota atingido no {self.name}", self.name)
         except asyncio.TimeoutError:
             raise TimeoutError(f"Gemini não respondeu em {LLM_REQUEST_TIMEOUT}s")
+        except Exception as e:
+            if "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e):
+                raise RateLimitError(
+                    f"Limite de cota atingido no {self.name}", self.name
+                )
+            raise e
 
 
 class OpenAICompatibleProvider(BaseProvider):
-    def __init__(self, api_key: str, base_url: str = None, name: str = "OpenAI", model_name: str = None):
+    def __init__(
+        self,
+        api_key: str,
+        base_url: str = None,
+        name: str = "OpenAI",
+        model_name: str = None,
+    ):
         if not model_name:
-            model_name = "gpt-3.5-turbo" if "openai" in name.lower() else "deepseek-chat"
+            model_name = (
+                "gpt-3.5-turbo" if "openai" in name.lower() else "deepseek-chat"
+            )
         super().__init__(name, model_name)
         self.client = AsyncOpenAI(
             api_key=api_key,
@@ -163,8 +194,18 @@ class OpenAICompatibleProvider(BaseProvider):
                 timeout=LLM_REQUEST_TIMEOUT,
             )
             return response.choices[0].message.content
+        except openai.RateLimitError:
+            raise RateLimitError(f"Limite de cota atingido no {self.name}", self.name)
         except asyncio.TimeoutError:
             raise TimeoutError(f"{self.name} não respondeu em {LLM_REQUEST_TIMEOUT}s")
+        except Exception as e:
+            if "429" in str(e) or "rate_limit" in str(e).lower():
+                raise RateLimitError(
+                    f"Limite de cota atingido no {self.name}", self.name
+                )
+            if "timeout" in str(e).lower():
+                raise TimeoutError(f"{self.name} timeout após {LLM_REQUEST_TIMEOUT}s")
+            raise e
 
 
 class ProviderFactory:
@@ -209,9 +250,11 @@ class ProviderFactory:
                 api_key=settings.OPENROUTER_API_KEY,
                 base_url="https://openrouter.ai/api/v1",
                 name="OpenRouter",
-                model_name=settings.OPENROUTER_MODEL
+                model_name=settings.OPENROUTER_MODEL,
             )
-            if await openrouter.is_available() and provider_health.is_healthy("OpenRouter"):
+            if await openrouter.is_available() and provider_health.is_healthy(
+                "OpenRouter"
+            ):
                 providers.append(openrouter)
             else:
                 provider_health.mark_unhealthy("OpenRouter")
