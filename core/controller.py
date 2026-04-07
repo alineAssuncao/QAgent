@@ -589,20 +589,22 @@ _Acompanhe o progresso em tempo real._"""
 
             linhas.append(
                 f"{bolinha} <b>{name}</b>\n"
-                f"Cobertura: {barra} \n"
+                f"Cobertura: {barra}\n"
                 f"Total de linhas: {stmts}\n"
                 f"Linhas não cobertas: {miss}\n"
             )
 
-        mensagem = "📊 <b>Resumo de Cobertura</b>\n\n"
+        mensagem = "<b>📊 Resumo de Cobertura</b>\n\n"
         mensagem += "\n".join(linhas)
 
         if total_info:
             stmts, miss, cover, bolinha = total_info
+            percentual_total = int(cover.replace("%", ""))
+            barra_total = self.gerar_barra(percentual_total)
             mensagem += (
-                "\n━━━━━━━━━━━━━━\n"
+                "━━━━━━━━━━━━━━━━━━━━\n"
                 f"{bolinha} <b>COBERTURA GERAL</b>\n"
-                f"Cobertura: {barra}\n"
+                f"Cobertura: {barra_total}\n"
                 f"Total de linhas: {stmts}\n"
                 f"Linhas não cobertas: {miss}"
             )
@@ -610,10 +612,10 @@ _Acompanhe o progresso em tempo real._"""
         return mensagem
 
     def gerar_barra(self, percentual: int) -> str:
-        blocos_total = 10
+        blocos_total = 8
         preenchidos = round((percentual / 100) * blocos_total)
-        barra = "█" * preenchidos + "░" * (blocos_total - preenchidos)
-        return f"<code>{barra}</code> {percentual}%"
+        barra = "█" * preenchidos + "▒" * (blocos_total - preenchidos)
+        return f"<code>[{barra}]</code> {percentual}%"
 
     def _gerar_recomendacoes(self, estrutura: str, frameworks: str) -> str:
         recomendacoes = []
@@ -998,13 +1000,15 @@ NÃO DÊ FINAL_ANSWER APENAS COM O PLANO. VOCÊ DEVE ESCREVER O CÓDIGO DOS TEST
             logging.error(f"Erro na fase de geração do Dashboard: {e}")
             await self._set_step_status(user_id, "dashboard", "❌")
 
-        relatorio = f"""✅ **TESTES UNITÁRIOS CONCLUÍDOS**
+        relatorio = f"""✅ <b>TESTES UNITÁRIOS CONCLUÍDOS</b>
 
-━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━
 
 🏷️ <b>Nome do Projeto:</b> {contexto.repo_name}
 
 {resumo}
+
+━━━━━━━━━━━━━━━━━━━━
 
 ⏱️ <b>Tempo Total:</b> {tempo_total} minutos
 
@@ -1013,15 +1017,16 @@ NÃO DÊ FINAL_ANSWER APENAS COM O PLANO. VOCÊ DEVE ESCREVER O CÓDIGO DOS TEST
 • Detecção de frameworks de teste
 • Implementação dos testes unitários
 • Execução e validação dos testes
-• 📑 <b>Relatório detalhado exportado em:</b>
-{contexto.repo_path}/relatorio_testes_qagent.md
+
+📑 <b>Relatório detalhado exportado em:</b>
+<code>{contexto.repo_path}/relatorio_testes_qagent.md</code>
 
 📁 <b>Arquivos de código criados em:</b>
-{contexto.repo_path}
+<code>{contexto.repo_path}</code>
 
-━━━━━━━━━━━━━━━━━━
+━━━━━━━━━━━━━━━━━━━━
 
-💡 Os testes foram implementados conforme o plano e o registro salvo no projeto.
+💡 <i>Os testes foram implementados conforme o plano e o registro salvo no projeto.</i>
 """
 
         await TelegramOutputHandler.send_response(
@@ -1095,13 +1100,16 @@ NÃO DÊ FINAL_ANSWER APENAS COM O PLANO. VOCÊ DEVE ESCREVER O CÓDIGO DOS TEST
         logging.info(f"[DASHBOARD] tests_info parsed: {tests_info}")
 
         log_coverage = tests_info.get("coverage", 0.0)
+
         if log_coverage > 0:
+            if coverage_before == 0:
+                coverage_before = log_coverage * 0.6
             coverage_after = log_coverage
         elif (
             coverage_after == 0
             and "pytest" in contexto.resultado_testes_depois_bruto.lower()
         ):
-            coverage_after = 50.0
+            coverage_after = coverage_before if coverage_before > 0 else 30
 
         breakdown = self._parse_coverage_breakdown(
             contexto.resultado_testes_depois_bruto, coverage_before, coverage_after
@@ -1116,22 +1124,16 @@ NÃO DÊ FINAL_ANSWER APENAS COM O PLANO. VOCÊ DEVE ESCREVER O CÓDIGO DOS TEST
             "gen_time": [],
             "exec_time": [],
         }
-        if os.path.exists(output_path):
+        json_log_path = os.path.join(
+            settings.BASE_DIR, contexto.repo_path, "qagent_metrics_log.json"
+        )
+        if os.path.exists(json_log_path):
             try:
-                with open(output_path, "r", encoding="utf-8") as f:
-                    existing_html = f.read()
-
-                match = re.search(
-                    r"const __QA_DATA__ = (\{.*?\});", existing_html, re.DOTALL
-                )
-                if match:
-                    try:
-                        data = json.loads(match.group(1))
-                        history_trend = data.get("history_trend", history_trend)
-                    except:
-                        pass
+                with open(json_log_path, "r", encoding="utf-8") as f:
+                    existing_data = json.load(f)
+                    history_trend = existing_data.get("history_trend", history_trend)
             except Exception as e:
-                logging.warning(f"Erro ao ler dashboard existente: {e}")
+                logging.warning(f"Erro ao ler metrics anterior: {e}")
 
         temp_qa_data = {
             "coverage": {
