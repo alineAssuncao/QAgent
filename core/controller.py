@@ -537,7 +537,7 @@ _Acompanhe o progresso em tempo real._"""
             r"COVERAGE.*?(\d+)%",
             r"Total.*?(\d+)%",
             r"Branch.*?(\d+)%",
-            r"TOTAL\s+\d+\s+\d+\s+(\d+)%",
+            r"TOTAL\s+\d+\s+\d+\s+\d+\s+\d+\s+(\d+)%",
         ]
 
         output_lower = output_testes.lower()
@@ -619,7 +619,9 @@ _Acompanhe o progresso em tempo real._"""
 
     def _carregar_dados_json_log(self, repo_path: str) -> Optional[Dict[str, Any]]:
         """Tenta carregar o arquivo de métricas JSON do projeto."""
-        json_path = os.path.join(settings.BASE_DIR, repo_path, "qagent_metrics_log.json")
+        json_path = os.path.join(
+            settings.BASE_DIR, repo_path, "qagent_metrics_log.json"
+        )
         if not os.path.exists(json_path):
             return None
         try:
@@ -634,7 +636,7 @@ _Acompanhe o progresso em tempo real._"""
         breakdown = data.get("breakdown", [])
         coverage_data = data.get("coverage", {})
         coverage_total = coverage_data.get("after", 0)
-        
+
         # Tenta pegar totais de linhas se disponíveis no root ou no breakdown
         total_stmts = 0
         total_miss = 0
@@ -648,10 +650,10 @@ _Acompanhe o progresso em tempo real._"""
             percentual = int(item.get("coverage_after", 0))
             stmts = item.get("stmts", 0)
             miss = item.get("miss", 0)
-            
+
             total_stmts += stmts
             total_miss += miss
-            
+
             bolinha = self._indicador(percentual)
             barra = self.gerar_barra(percentual)
 
@@ -1066,7 +1068,9 @@ NÃO DÊ FINAL_ANSWER APENAS COM O PLANO. VOCÊ DEVE ESCREVER O CÓDIGO DOS TEST
         if json_data:
             resumo = self._gerar_resumo_visual_json(json_data)
         else:
-            resumo = self._extrair_resumo_coverage(contexto.resultado_testes_depois_bruto)
+            resumo = self._extrair_resumo_coverage(
+                contexto.resultado_testes_depois_bruto
+            )
 
         relatorio = f"""✅ <b>TESTES UNITÁRIOS CONCLUÍDOS</b>
 
@@ -1171,18 +1175,13 @@ NÃO DÊ FINAL_ANSWER APENAS COM O PLANO. VOCÊ DEVE ESCREVER O CÓDIGO DOS TEST
 
         if log_coverage > 0:
             coverage_after = log_coverage
-        elif (
-            coverage_after == 0
-            and "pytest" in contexto.resultado_testes_depois_bruto.lower()
-        ):
-            coverage_after = 30.0
 
         # Refatorado para usar o log real do antes para o breakdown
         breakdown = self._parse_coverage_breakdown(
             contexto.resultado_testes_depois_bruto,
             contexto.resultado_testes_antes_bruto,
-            coverage_before, 
-            coverage_after
+            coverage_before,
+            coverage_after,
         )
 
         history_trend = {
@@ -1465,11 +1464,15 @@ NÃO DÊ FINAL_ANSWER APENAS COM O PLANO. VOCÊ DEVE ESCREVER O CÓDIGO DOS TEST
         return cov_map
 
     def _parse_coverage_breakdown(
-        self, output_testes: str, output_antes: str = "", coverage_before_total: float = 0, coverage_after_total: float = 0
+        self,
+        output_testes: str,
+        output_antes: str = "",
+        coverage_before_total: float = 0,
+        coverage_after_total: float = 0,
     ) -> list:
         """Parseia a cobertura por módulo do output do pytest, comparando com o antes real."""
         breakdown = []
-        
+
         # Mapear cobertura inicial real se disponível
         antes_map = self._get_coverage_map(output_antes)
 
@@ -1495,7 +1498,7 @@ NÃO DÊ FINAL_ANSWER APENAS COM O PLANO. VOCÊ DEVE ESCREVER O CÓDIGO DOS TEST
                             stmts = int(parts[1]) if parts[1].isdigit() else 0
                             miss = int(parts[2]) if parts[2].isdigit() else 0
                             coverage = parts[3].replace("%", "").replace(",", "")
-                            
+
                             if coverage.replace(".", "").replace("-", "").isdigit():
                                 cov_float = min(float(coverage), 100.0)
                                 # Buscar cobertura real "antes" de cada arquivo
