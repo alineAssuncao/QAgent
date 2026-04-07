@@ -617,6 +617,67 @@ _Acompanhe o progresso em tempo real._"""
         barra = "█" * preenchidos + "▒" * (blocos_total - preenchidos)
         return f"<code>[{barra}]</code> {percentual}%"
 
+    def _carregar_dados_json_log(self, repo_path: str) -> Optional[Dict[str, Any]]:
+        """Tenta carregar o arquivo de métricas JSON do projeto."""
+        json_path = os.path.join(settings.BASE_DIR, repo_path, "qagent_metrics_log.json")
+        if not os.path.exists(json_path):
+            return None
+        try:
+            with open(json_path, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except Exception as e:
+            logging.error(f"Erro ao carregar qagent_metrics_log.json: {e}")
+            return None
+
+    def _gerar_resumo_visual_json(self, data: Dict[str, Any]) -> str:
+        """Gera o resumo visual do Telegram usando dados estruturados do JSON."""
+        breakdown = data.get("breakdown", [])
+        coverage_data = data.get("coverage", {})
+        coverage_total = coverage_data.get("after", 0)
+        
+        # Tenta pegar totais de linhas se disponíveis no root ou no breakdown
+        total_stmts = 0
+        total_miss = 0
+
+        if not breakdown:
+            return "⚠️ <b>Dados de coverage não encontrados no log estruturado.</b>"
+
+        linhas = []
+        for item in breakdown:
+            name = item.get("module", "unknown")
+            percentual = int(item.get("coverage_after", 0))
+            stmts = item.get("stmts", 0)
+            miss = item.get("miss", 0)
+            
+            total_stmts += stmts
+            total_miss += miss
+            
+            bolinha = self._indicador(percentual)
+            barra = self.gerar_barra(percentual)
+
+            linhas.append(
+                f"{bolinha} <b>{name}</b>\n"
+                f"Cobertura: {barra}\n"
+                f"Total de linhas: {stmts}\n"
+                f"Linhas não cobertas: {miss}\n"
+            )
+
+        mensagem = "<b>📊 Resumo de Cobertura</b>\n\n"
+        mensagem += "\n".join(linhas)
+
+        # Adicionar Cobertura Geral
+        bolinha_geral = self._indicador(int(coverage_total))
+        barra_geral = self.gerar_barra(int(coverage_total))
+        mensagem += (
+            "━━━━━━━━━━━━━━━━━━━━\n"
+            f"{bolinha_geral} <b>COBERTURA GERAL</b>\n"
+            f"Cobertura: {barra_geral}\n"
+            f"Total de linhas: {total_stmts}\n"
+            f"Linhas não cobertas: {total_miss}"
+        )
+
+        return mensagem
+
     def _gerar_recomendacoes(self, estrutura: str, frameworks: str) -> str:
         recomendacoes = []
 
@@ -1000,6 +1061,13 @@ NÃO DÊ FINAL_ANSWER APENAS COM O PLANO. VOCÊ DEVE ESCREVER O CÓDIGO DOS TEST
             logging.error(f"Erro na fase de geração do Dashboard: {e}")
             await self._set_step_status(user_id, "dashboard", "❌")
 
+        # Tenta carregar dados do JSON para um relatório visual superior
+        json_data = self._carregar_dados_json_log(contexto.repo_path)
+        if json_data:
+            resumo = self._gerar_resumo_visual_json(json_data)
+        else:
+            resumo = self._extrair_resumo_coverage(contexto.resultado_testes_depois_bruto)
+
         relatorio = f"""✅ <b>TESTES UNITÁRIOS CONCLUÍDOS</b>
 
 ━━━━━━━━━━━━━━━━━━━━
@@ -1102,17 +1170,19 @@ NÃO DÊ FINAL_ANSWER APENAS COM O PLANO. VOCÊ DEVE ESCREVER O CÓDIGO DOS TEST
         log_coverage = tests_info.get("coverage", 0.0)
 
         if log_coverage > 0:
-            if coverage_before == 0:
-                coverage_before = log_coverage * 0.6
             coverage_after = log_coverage
         elif (
             coverage_after == 0
             and "pytest" in contexto.resultado_testes_depois_bruto.lower()
         ):
-            coverage_after = coverage_before if coverage_before > 0 else 30
+            coverage_after = 30.0
 
+        # Refatorado para usar o log real do antes para o breakdown
         breakdown = self._parse_coverage_breakdown(
-            contexto.resultado_testes_depois_bruto, coverage_before, coverage_after
+            contexto.resultado_testes_depois_bruto,
+            contexto.resultado_testes_antes_bruto,
+            coverage_before, 
+            coverage_after
         )
 
         history_trend = {
@@ -1362,11 +1432,46 @@ NÃO DÊ FINAL_ANSWER APENAS COM O PLANO. VOCÊ DEVE ESCREVER O CÓDIGO DOS TEST
 
         return False
 
+    def _get_coverage_map(self, output_testes: str) -> Dict[str, float]:
+        """Extrai um mapeamento de arquivo -> coverage de um log do pytest."""
+        cov_map = {}
+        if not output_testes:
+            return cov_map
+
+        lines = output_testes.split("\n")
+        for line in lines:
+            line = line.strip()
+            if (
+                line
+                and not line.startswith("=")
+                and not line.startswith("TOTAL")
+                and not line.startswith("Name")
+            ):
+                parts = line.split()
+                if len(parts) >= 4:
+                    first_col = parts[0]
+                    if (
+                        first_col.endswith(".py")
+                        or "/" in first_col
+                        or "\\" in first_col
+                    ):
+                        try:
+                            module = first_col.replace("\\", "/")
+                            coverage_str = parts[3].replace("%", "").replace(",", "")
+                            if coverage_str.replace(".", "").replace("-", "").isdigit():
+                                cov_map[module] = float(coverage_str)
+                        except:
+                            pass
+        return cov_map
+
     def _parse_coverage_breakdown(
-        self, output_testes: str, coverage_before: float = 0, coverage_after: float = 0
+        self, output_testes: str, output_antes: str = "", coverage_before_total: float = 0, coverage_after_total: float = 0
     ) -> list:
-        """Parseia a cobertura por módulo do output do pytest."""
+        """Parseia a cobertura por módulo do output do pytest, comparando com o antes real."""
         breakdown = []
+        
+        # Mapear cobertura inicial real se disponível
+        antes_map = self._get_coverage_map(output_antes)
 
         lines = output_testes.split("\n")
         for line in lines:
@@ -1390,33 +1495,37 @@ NÃO DÊ FINAL_ANSWER APENAS COM O PLANO. VOCÊ DEVE ESCREVER O CÓDIGO DOS TEST
                             stmts = int(parts[1]) if parts[1].isdigit() else 0
                             miss = int(parts[2]) if parts[2].isdigit() else 0
                             coverage = parts[3].replace("%", "").replace(",", "")
+                            
                             if coverage.replace(".", "").replace("-", "").isdigit():
-                                cov_float = float(coverage)
-                                cov_before = max(0, cov_float * 0.5)
-                                delta = cov_float - cov_before
+                                cov_float = min(float(coverage), 100.0)
+                                # Buscar cobertura real "antes" de cada arquivo
+                                cov_before = antes_map.get(module, 0.0)
+                                delta = round(cov_float - cov_before, 2)
 
                                 breakdown.append(
                                     {
                                         "module": module,
+                                        "stmts": stmts,
+                                        "miss": miss,
                                         "coverage_before": round(cov_before, 2),
                                         "coverage_after": round(cov_float, 2),
-                                        "delta": round(delta, 2),
+                                        "delta": delta,
                                     }
                                 )
                         except:
                             pass
 
-        if not breakdown and coverage_after > 0:
+        if not breakdown and coverage_after_total > 0:
             breakdown.append(
                 {
                     "module": "Main Module (project)",
-                    "coverage_before": coverage_before,
-                    "coverage_after": coverage_after,
-                    "delta": round(coverage_after - coverage_before, 2),
+                    "coverage_before": coverage_before_total,
+                    "coverage_after": coverage_after_total,
+                    "delta": round(coverage_after_total - coverage_before_total, 2),
                 }
             )
 
-        return breakdown[:10]
+        return sorted(breakdown, key=lambda x: x["delta"], reverse=True)[:10]
 
     def _check_has_tests(self, repo_path: str) -> bool:
         """Verifica se o repositório tem arquivos de teste."""
