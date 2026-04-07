@@ -9,7 +9,6 @@ from core.tools.manager import ToolManager
 from core.middleware import provider_health
 
 
-
 class AgentLoop:
     def __init__(
         self,
@@ -20,7 +19,7 @@ class AgentLoop:
         available_providers: List[BaseProvider] = None,
     ) -> None:
         self.conversation_id: str = conversation_id
-        self.provider: BaseProvider = provider # Provedor atual
+        self.provider: BaseProvider = provider  # Provedor atual
         self.available_providers: List[BaseProvider] = available_providers or [provider]
         self.tool_manager: Optional[ToolManager] = tool_manager
 
@@ -96,18 +95,19 @@ Lembre-se: Sempre use 'FINAL_ANSWER:' para concluir sua tarefa.
             while retries < max_fallback_retries:
                 try:
                     response_content = await self.provider.generate_response(messages)
-                    break 
+                    break
                 except RateLimitError as e:
                     retries += 1
                     provider_health.mark_unhealthy(self.provider.name)
-                    
-                    # Tentar encontrar próximo provedor saudável
+
                     next_provider = None
                     for p in self.available_providers:
-                        if p.name != self.provider.name and provider_health.is_healthy(p.name):
+                        if p.name != self.provider.name and provider_health.is_healthy(
+                            p.name
+                        ):
                             next_provider = p
                             break
-                    
+
                     if next_provider:
                         msg_fallback = f"🔄 Limite atingido no {self.provider.name}. Alternando para {next_provider.name}..."
                         await self._update_status(msg_fallback)
@@ -117,15 +117,51 @@ Lembre-se: Sempre use 'FINAL_ANSWER:' para concluir sua tarefa.
                         await self._update_status(error_msg)
                         raise e
                 except Exception as e:
-                    # Outros erros (timeout, etc) podem ser tratados aqui ou subir
-                    raise e
-            
+                    error_str = str(e).lower()
+                    retries += 1
+
+                    is_retryable = any(
+                        x in error_str
+                        for x in [
+                            "400",
+                            "timeout",
+                            "connection",
+                            "failed to load",
+                            "error loading model",
+                            "server disconnected",
+                            "unavailable",
+                        ]
+                    )
+
+                    if is_retryable:
+                        provider_health.mark_unhealthy(self.provider.name)
+                        next_provider = None
+                        for p in self.available_providers:
+                            if (
+                                p.name != self.provider.name
+                                and provider_health.is_healthy(p.name)
+                            ):
+                                next_provider = p
+                                break
+
+                        if next_provider:
+                            msg_fallback = f"⚠️ Erro no {self.provider.name}: {str(e)[:50]}... Alternando para {next_provider.name}..."
+                            await self._update_status(msg_fallback)
+                            self.provider = next_provider
+                        else:
+                            error_msg = f"❌ Erro em todos os provedores disponíveis: {str(e)[:100]}"
+                            await self._update_status(error_msg)
+                            raise e
+                    else:
+                        raise e
+
             if not response_content:
-                raise Exception("Falha crítica: Provedor não retornou conteúdo após tentativas de fallback.")
+                raise Exception(
+                    "Falha crítica: Provedor não retornou conteúdo após tentativas de fallback."
+                )
 
             # Adicionar a resposta do assistente ao contexto do loop
             messages.append({"role": "assistant", "content": response_content})
-
 
             # 4. Verificar se é uma Resposta Final
             if "FINAL_ANSWER:" in response_content:
