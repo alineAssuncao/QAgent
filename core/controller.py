@@ -287,14 +287,20 @@ class AgentController:
                 await clone_tool.execute(url=git_url)
                 contexto.repo_name = git_url.split("/")[-1].replace(".git", "")
                 contexto.repo_path = f"projects/{contexto.repo_name}"
-                await message.edit_text(
+                from core.bot import bot
+
+                await bot.send_message(
+                    chat_id,
                     f"✅ <b>Repositório clonado:</b> {contexto.repo_name}",
                     parse_mode="HTML",
                 )
             else:
                 contexto.repo_name = local_path or "unknown"
                 contexto.repo_path = f"projects/{contexto.repo_name}"
-                await message.edit_text(
+                from core.bot import bot
+
+                await bot.send_message(
+                    chat_id,
                     f"✅ <b>Usando repositório local:</b> {contexto.repo_name}",
                     parse_mode="HTML",
                 )
@@ -327,7 +333,7 @@ _Acompanhe o progresso em tempo real._"""
     async def _set_step_status(self, user_id: int, step: str, status: str):
         """Atualiza um passo do lifecycle e edita o card no Telegram."""
         contexto = self.contextos.get(user_id)
-        if not contexto or not contexto.status_msg_id:
+        if not contexto or not contexto.chat_id:
             return
 
         contexto.lifecycle[step] = status
@@ -336,23 +342,12 @@ _Acompanhe o progresso em tempo real._"""
         from core.bot import bot
 
         try:
-            await bot.edit_message_text(
-                chat_id=contexto.chat_id,
-                message_id=contexto.status_msg_id,
-                text=card_texto,
-                parse_mode="HTML",
+            new_msg = await bot.send_message(
+                contexto.chat_id, card_texto, parse_mode="HTML"
             )
+            contexto.status_msg_id = new_msg.message_id
         except Exception as e:
-            logging.warning(f"Não foi possível editar a mensagem de status: {e}")
-            try:
-                new_msg = await bot.send_message(
-                    contexto.chat_id, card_texto, parse_mode="HTML"
-                )
-                contexto.status_msg_id = new_msg.message_id
-            except Exception as e2:
-                logging.warning(
-                    f"Não foi possível enviar nova mensagem de status: {e2}"
-                )
+            logging.warning(f"Não foi possível enviar mensagem de status: {e}")
 
     async def _analisar_repositorio(
         self, contexto: QATestContext, user_id: int, message: types.Message
@@ -374,21 +369,22 @@ _Acompanhe o progresso em tempo real._"""
                 "🔍 <b>Analisando estrutura do repositório...</b>",
                 parse_mode="HTML",
             )
-        except Exception as e:
-            logging.warning(f"Não foi possível editar mensagem: {e}")
-            await bot.send_message(
-                contexto.chat_id,
-                "🔍 <b>Analisando estrutura do repositório...</b>",
-                parse_mode="HTML",
-            )
 
         list_tool = ListDirectoryTool()
         estrutura = await list_tool.execute(path=contexto.repo_path)
         contexto.estrutura = estrutura
 
-        await message.edit_text(
-            "🛠️ <b>Detectando frameworks de teste...</b>", parse_mode="HTML"
-        )
+        try:
+            await message.edit_text(
+                "🛠️ <b>Detectando frameworks de teste...</b>", parse_mode="HTML"
+            )
+        except Exception as e:
+            logging.warning(f"Não foi possível editar mensagem: {e}")
+            await bot.send_message(
+                contexto.chat_id,
+                "🛠️ <b>Detectando frameworks de teste...</b>",
+                parse_mode="HTML",
+            )
 
         git_tool = GitManagementTool()
         frameworks = await git_tool.execute(
@@ -429,10 +425,18 @@ _Acompanhe o progresso em tempo real._"""
                 del self.contextos[user_id]
             return
 
-        await message.edit_text(
-            "📊 <b>Executando testes atuais para medir cobertura...</b>",
-            parse_mode="HTML",
-        )
+        try:
+            await message.edit_text(
+                "📊 <b>Executando testes atuais para medir cobertura...</b>",
+                parse_mode="HTML",
+            )
+        except Exception as e:
+            logging.warning(f"Não foi possível editar mensagem: {e}")
+            await bot.send_message(
+                contexto.chat_id,
+                "📊 <b>Executando testes atuais para medir cobertura...</b>",
+                parse_mode="HTML",
+            )
 
         repo_full_path = os.path.join(settings.BASE_DIR, contexto.repo_path)
 
