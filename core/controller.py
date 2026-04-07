@@ -344,18 +344,43 @@ _Acompanhe o progresso em tempo real._"""
             )
         except Exception as e:
             logging.warning(f"Não foi possível editar a mensagem de status: {e}")
+            try:
+                new_msg = await bot.send_message(
+                    contexto.chat_id, card_texto, parse_mode="HTML"
+                )
+                contexto.status_msg_id = new_msg.message_id
+            except Exception as e2:
+                logging.warning(
+                    f"Não foi possível enviar nova mensagem de status: {e2}"
+                )
 
     async def _analisar_repositorio(
         self, contexto: QATestContext, user_id: int, message: types.Message
     ):
+        from core.bot import bot
         from core.tools.repository import ListDirectoryTool
         from core.tools.git_management import GitManagementTool
 
         from core.tools.skills import SkillActivationTool
 
-        await message.edit_text(
-            "🔍 <b>Analisando estrutura do repositório...</b>", parse_mode="HTML"
-        )
+        try:
+            await message.edit_text(
+                "🔍 <b>Analisando estrutura do repositório...</b>", parse_mode="HTML"
+            )
+        except Exception as e:
+            logging.warning(f"Não foi possível editar mensagem: {e}")
+            await bot.send_message(
+                contexto.chat_id,
+                "🔍 <b>Analisando estrutura do repositório...</b>",
+                parse_mode="HTML",
+            )
+        except Exception as e:
+            logging.warning(f"Não foi possível editar mensagem: {e}")
+            await bot.send_message(
+                contexto.chat_id,
+                "🔍 <b>Analisando estrutura do repositório...</b>",
+                parse_mode="HTML",
+            )
 
         list_tool = ListDirectoryTool()
         estrutura = await list_tool.execute(path=contexto.repo_path)
