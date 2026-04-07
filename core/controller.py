@@ -285,6 +285,7 @@ class AgentController:
 
                 clone_tool = CloneRepositoryTool()
                 await clone_tool.execute(url=git_url)
+                await self._set_step_status(user_id, "clonagem", "✅")
                 contexto.repo_name = git_url.split("/")[-1].replace(".git", "")
                 contexto.repo_path = f"projects/{contexto.repo_name}"
                 from core.bot import bot
@@ -295,6 +296,7 @@ class AgentController:
                     parse_mode="HTML",
                 )
             else:
+                await self._set_step_status(user_id, "clonagem", "✅")
                 contexto.repo_name = local_path or "unknown"
                 contexto.repo_path = f"projects/{contexto.repo_name}"
                 from core.bot import bot
