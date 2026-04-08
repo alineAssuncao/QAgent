@@ -5,7 +5,7 @@ from aiogram.filters import Command
 from core.config import settings
 
 # Configuração de Logs
-logging.basicConfig(level=settings.LOG_LEVEL)
+logging.basicConfig(level=settings.LOG_LEVEL, format='%(asctime)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s')
 
 # Instância do Bot e Dispatcher
 bot = Bot(token=settings.TELEGRAM_BOT_TOKEN)
