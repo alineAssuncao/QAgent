@@ -5,8 +5,12 @@ from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional
 from core.config import settings
 from core.middleware import provider_health
-from google import genai
-from google.api_core import exceptions as google_exceptions
+try:
+    from google import genai
+    from google.api_core import exceptions as google_exceptions
+    HAS_GEMINI = True
+except ImportError:
+    HAS_GEMINI = False
 import openai
 from openai import AsyncOpenAI
 
@@ -95,9 +99,42 @@ class LMStudioProvider(BaseProvider):
             raise TimeoutError(f"LM Studio não respondeu em {LM_STUDIO_TIMEOUT}s")
 
 
+class OllamaProvider(BaseProvider):
+    def __init__(self, base_url: str, model_name: str):
+        super().__init__("Ollama (Local)", model_name)
+        self.client = AsyncOpenAI(
+            base_url=f"{base_url}/v1",
+            api_key="ollama",
+            timeout=LLM_REQUEST_TIMEOUT,
+        )
+        self.base_url = base_url
+
+    async def is_available(self) -> bool:
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(f"{self.base_url}/api/tags", timeout=2.0)
+                return response.status_code == 200
+        except Exception:
+            return False
+
+    async def generate_response(self, messages: List[Dict[str, str]]) -> str:
+        try:
+            response = await asyncio.wait_for(
+                self.client.chat.completions.create(
+                    model=self.model_name, messages=messages
+                ),
+                timeout=LLM_REQUEST_TIMEOUT,
+            )
+            return response.choices[0].message.content
+        except asyncio.TimeoutError:
+            raise TimeoutError(f"Ollama não respondeu em {LLM_REQUEST_TIMEOUT}s")
+
+
 class GeminiProvider(BaseProvider):
     def __init__(self, api_key: str):
         super().__init__("Google Gemini", "models/gemini-2.5-flash")
+        if not HAS_GEMINI:
+            raise ImportError("A biblioteca 'google-genai' não está instalada. Execute 'pip install google-genai' para usar este provedor.")
         self.client = genai.Client(api_key=api_key)
         self.api_key = api_key
 
@@ -172,7 +209,7 @@ class OpenAICompatibleProvider(BaseProvider):
     ):
         if not model_name:
             model_name = (
-                "gpt-3.5-turbo" if "openai" in name.lower() else "deepseek-chat"
+                "gpt-4o-mini" if "openai" in name.lower() else "deepseek-chat"
             )
         super().__init__(name, model_name)
         self.client = AsyncOpenAI(
@@ -235,13 +272,16 @@ class ProviderFactory:
                 provider_health.mark_unhealthy("Ollama")
 
         # 2. Gemini
-        if settings.GEMINI_API_KEY:
-            gemini = GeminiProvider(settings.GEMINI_API_KEY)
-            if await gemini.is_available() and provider_health.is_healthy(
-                "Google Gemini"
-            ):
-                providers.append(gemini)
-            else:
+        if settings.GEMINI_API_KEY and HAS_GEMINI:
+            try:
+                gemini = GeminiProvider(settings.GEMINI_API_KEY)
+                if await gemini.is_available() and provider_health.is_healthy(
+                    "Google Gemini"
+                ):
+                    providers.append(gemini)
+                else:
+                    provider_health.mark_unhealthy("Google Gemini")
+            except Exception:
                 provider_health.mark_unhealthy("Google Gemini")
 
         # 3. OpenRouter

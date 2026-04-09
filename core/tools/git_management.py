@@ -186,7 +186,7 @@ class GitManagementTool(BaseTool):
                     return f"Erro ao instalar pytest através do venv pip:\n{result.stderr}"
             else:
                 # Fallback, tenta usar python -m pip no contexto atual
-                result = await self._run_command(["python", "-m", "pip", "install", "pytest", "pytest-cov"], cwd=repo_path)
+                result = await self._run_command([sys.executable, "-m", "pip", "install", "pytest", "pytest-cov"], cwd=repo_path)
                 if result.returncode != 0:
                     return f"Erro ao instalar pytest:\nPython: {result.stderr}"
         return "ok"
@@ -206,9 +206,9 @@ class GitManagementTool(BaseTool):
             (
                 "pytest.ini",
                 [
-                    "python",
+                    sys.executable,
                     "-m",
-                    "pytest_cmd",
+                    "pytest",
                     "--cov=.",
                     "--cov-report=term",
                     "--maxfail=5",
@@ -217,15 +217,15 @@ class GitManagementTool(BaseTool):
             (
                 "pyproject.toml",
                 [
-                    "python",
+                    sys.executable,
                     "-m",
-                    "pytest_cmd",
+                    "pytest",
                     "--cov=.",
                     "--cov-report=term",
                     "--maxfail=5",
                 ],
             ),
-            ("setup.py", ["python", "-m", "pytest_cmd", "--cov=.", "--cov-report=term"]),
+            ("setup.py", [sys.executable, "-m", "pytest", "--cov=.", "--cov-report=term"]),
             ("Cargo.toml", ["cargo", "test"]),
             ("pom.xml", ["mvn", "clean", "test", "jacoco:report"]),
         ]
@@ -307,9 +307,9 @@ class GitManagementTool(BaseTool):
 
             try:
                 cmd = [
-                    "python",
+                    sys.executable,
                     "-m",
-                    "pytest_cmd",
+                    "pytest",
                     "--cov=.",
                     "--cov-report=term",
                     "--maxfail=5",
@@ -345,7 +345,7 @@ class GitManagementTool(BaseTool):
         return f"Erro no push: {result.stderr}"
 
     async def _run_command(
-        self, cmd: List[str], cwd: str
+        self, cmd: List[str], cwd: str, timeout: int = 120
     ) -> asyncio.subprocess.Process:
         """Executa um comando de forma assíncrona."""
         process = await asyncio.create_subprocess_exec(
@@ -354,12 +354,20 @@ class GitManagementTool(BaseTool):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, stderr = await process.communicate()
-
+        
         class Result:
             def __init__(self, returncode, stdout, stderr):
                 self.returncode = returncode
-                self.stdout = stdout.decode() if stdout else ""
-                self.stderr = stderr.decode() if stderr else ""
+                self.stdout = stdout.decode("utf-8", errors="replace") if stdout else ""
+                self.stderr = stderr.decode("utf-8", errors="replace") if stderr else ""
+
+        try:
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout)
+        except asyncio.TimeoutError:
+            try:
+                process.kill()
+            except Exception:
+                pass
+            return Result(-1, b"", b"TIMEOUT EXCEDIDO: O teste pendurou ou entrou em loop infinito.")
 
         return Result(process.returncode, stdout, stderr)

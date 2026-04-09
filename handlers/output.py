@@ -5,7 +5,11 @@ from aiogram import types
 from aiogram.utils.chat_action import ChatActionSender
 from core.bot import bot
 from core.config import settings
-import edge_tts
+try:
+    import edge_tts
+    HAS_EDGE_TTS = True
+except ImportError:
+    HAS_EDGE_TTS = False
 
 class TelegramOutputHandler:
     @staticmethod
@@ -44,6 +48,9 @@ class TelegramOutputHandler:
 
         try:
             async with ChatActionSender.record_voice(chat_id=chat_id, bot=bot):
+                if not HAS_EDGE_TTS:
+                    raise ImportError("A biblioteca 'edge-tts' não está instalada.")
+                    
                 # Limpar markdown básico do texto para a voz não ler símbolos
                 clean_text = text.replace("#", "").replace("*", "").replace("`", "")
                 

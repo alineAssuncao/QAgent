@@ -1,6 +1,7 @@
 import logging
 import json
 import re
+import os
 from typing import List, Dict, Any, Optional, Callable, Coroutine, Union
 from core.provider import BaseProvider, RateLimitError
 from memory.repository import MessageRepository
@@ -160,6 +161,53 @@ Lembre-se: Sempre use 'FINAL_ANSWER:' para concluir sua tarefa.
                     "Falha crítica: Provedor não retornou conteúdo após tentativas de fallback."
                 )
 
+            # --- AUTO-LOG INFALÍVEL IDE Console & Arquivo ---
+            # Parseia o raw e cria uma visualização linda para o terminal e markdown
+            _t_match = re.search(r"Thought:\s*(.*?)(?=Action:|$)", response_content, re.DOTALL)
+            _t_text = _t_match.group(1).strip() if _t_match else ""
+            
+            _a_match = re.search(r"Action:\s*`?(\w+)`?", response_content)
+            _a_text = _a_match.group(1).strip() if _a_match else ""
+            
+            _ai_match = re.search(r"Action Input:\s*({.*})", response_content, re.DOTALL)
+            _ai_text = _ai_match.group(1).strip() if _ai_match else ""
+
+            # 1. Impressão bonita no Console
+            print(f"\n\033[44;97m 📝 [QA Relator_log] Iteração {current_iteration} \033[0m", flush=True)
+            if _t_match and _a_match:
+                print(f"\n\033[1;36m🧠 Pensamento Estratégico:\033[0m")
+                print(f"\033[93m{_t_text}\033[0m\n")
+                print(f"\033[1;35m⚡ Decisão/Ação:\033[0m \033[97m{_a_text}\033[0m", flush=True)
+                print(f"\033[1;30m📦 Parâmetros:\033[0m \033[90m{_ai_text}\033[0m", flush=True)
+            else:
+                print(f"\n\033[93m{response_content}\033[0m", flush=True)
+            print(f"\033[90m{'-'*60}\033[0m\n", flush=True)
+            
+            # 2. Gravação Silenciosa no log.md
+            try:
+                from datetime import datetime
+                p_match = re.search(r"Repositorio:\s*([^\n]+)", system_prompt) or re.search(r"Repositório:\s*([^\n]+)", system_prompt)
+                p_path = p_match.group(1).strip() if p_match else "."
+                if not p_path.startswith("projects/") and not os.path.isabs(p_path) and os.path.exists(os.path.join("projects", p_path)):
+                    p_path = os.path.join("projects", p_path)
+                os.makedirs(p_path, exist_ok=True)
+                log_path = os.path.join(p_path, "log.md")
+                
+                header = f"# 📝 QA Relator_log - Auditoria Oficial\n**Início da Sessão:** {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n---\n" if not os.path.exists(log_path) else ""
+                
+                with open(log_path, "a", encoding="utf-8") as f:
+                    if header: f.write(header)
+                    f.write(f"## [Iteração {current_iteration}]\n")
+                    if _t_match and _a_match:
+                        f.write(f"**🧠 Pensamento Estratégico:**\n{_t_text}\n\n")
+                        f.write(f"**⚡ Decisão/Ação:** `{_a_text}`\n")
+                        f.write(f"**📦 Parâmetros:**\n```json\n{_ai_text}\n```\n\n")
+                    else:
+                        f.write(f"**🤖 Resposta Bruta:**\n```text\n{response_content}\n```\n\n")
+                    f.write("---\n")
+            except Exception as e:
+                logging.error(f"Erro ao salvar log no arquivo log.md: {e}")
+                
             # Adicionar a resposta do assistente ao contexto do loop
             messages.append({"role": "assistant", "content": response_content})
 
@@ -167,6 +215,23 @@ Lembre-se: Sempre use 'FINAL_ANSWER:' para concluir sua tarefa.
             if "FINAL_ANSWER:" in response_content:
                 final_answer = response_content.split("FINAL_ANSWER:")[-1].strip()
                 await self._update_status("✅ Resposta final gerada.")
+                
+                # Auto-log Final Answer Console & Arquivo
+                print(f"\n\033[1;92m✅ [FINAL_ANSWER GERADA]\033[0m", flush=True)
+                print(f"\033[92m{final_answer}\033[0m\n", flush=True)
+                
+                try:
+                    p_match = re.search(r"Repositorio:\s*([^\n]+)", system_prompt) or re.search(r"Repositório:\s*([^\n]+)", system_prompt)
+                    p_path = p_match.group(1).strip() if p_match else "."
+                    if not p_path.startswith("projects/") and not os.path.isabs(p_path) and os.path.exists(os.path.join("projects", p_path)):
+                        p_path = os.path.join("projects", p_path)
+                    os.makedirs(p_path, exist_ok=True)
+                    log_path = os.path.join(p_path, "log.md")
+                    with open(log_path, "a", encoding="utf-8") as f:
+                        f.write(f"## ✅ Resposta Final\n**Resposta:**\n{final_answer}\n\n---\n")
+                except Exception as e:
+                    pass
+                
                 break
 
             tool_name: str = "unknown"
@@ -197,8 +262,6 @@ Lembre-se: Sempre use 'FINAL_ANSWER:' para concluir sua tarefa.
                     )
 
                     await self._update_status(f"🛠️ Executando: {tool_name}")
-                    logging.info(f"THOUGHT: {thought}")
-                    logging.info(f"ACTION: {tool_name}({tool_args})")
 
                     observation = await self.tool_manager.call_tool(
                         tool_name, tool_args

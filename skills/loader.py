@@ -24,6 +24,7 @@ class SkillLoader:
                     skill_data = self._parse_skill_file(skill_file)
                     if skill_data:
                         skill_data['path'] = skill_file
+                        logging.info(f"Skill carregada: {skill_data.get('name')}")
                         self.skills.append(skill_data)
         
         logging.info(f"{len(self.skills)} Skills carregadas com sucesso.")

@@ -17,6 +17,7 @@ from memory.database import Database
 from handlers.input import TelegramInputHandler
 from handlers.output import TelegramOutputHandler
 from core.tools.repository import ReadFileTool, WriteFileTool
+from core.tools.shell import RunShellTool
 from aiogram import types
 import sys
 
@@ -112,6 +113,7 @@ class QATestContext:
         self.recomendacoes: str = ""
         self.progresso_task: Optional[asyncio.Task] = None
         self.start_time: Optional[datetime] = None
+        self.llm_model: str = "Aguardando..."
         self.erro_encontrado: bool = False
 
 
@@ -121,6 +123,22 @@ class AgentController:
         self.active_provider: Optional[BaseProvider] = None
         self.running_tasks: Dict[int, asyncio.Task] = {}
         self.contextos: Dict[int, QATestContext] = {}
+        logging.info(f"DEBUG: _get_skills_prompt exists? {hasattr(self, '_get_skills_prompt')}")
+
+    def _get_skills_prompt(self) -> str:
+        """Formata as skills carregadas para inclusão no system prompt."""
+        if not self.skill_loader.skills:
+            return ""
+        
+        prompt = "\n\n━━━━━━━━━━━━━━━━━━━━\nSKILLS ADICIONAIS DISPONÍVEIS:\n"
+        for skill in self.skill_loader.skills:
+            name = skill.get("name", "Unknown")
+            desc = skill.get("description", "")
+            instr = skill.get("full_instruction", "")
+            prompt += f"\n--- SKILL: {name} ---\nDescrição: {desc}\n{instr}\n"
+        
+        prompt += "\n━━━━━━━━━━━━━━━━━━━━\n"
+        return prompt
 
     async def initialize(self):
         await Database.init_db()
@@ -254,6 +272,7 @@ class AgentController:
                     return test_type
         return "unitario"  # padrão: teste unitário
 
+
     async def _iniciar_fluxo_qa(
         self,
         message: types.Message,
@@ -272,6 +291,14 @@ class AgentController:
         contexto.test_type = test_type
         contexto.start_time = datetime.now()
         self.contextos[user_id] = contexto
+        
+        # Detectar a LLM ativa logo no início para aparecer no card inicial
+        try:
+            from core.provider import ProviderFactory
+            provider = await ProviderFactory.get_active_provider()
+            contexto.llm_model = provider.model_name
+        except Exception:
+            contexto.llm_model = "Não detectada"
 
         try:
             # Iniciando o Card de Status (Checklist Global)
@@ -281,8 +308,12 @@ class AgentController:
 
             if git_url:
                 await self._set_step_status(user_id, "clonagem", "🔄")
+                from core.tools.shell import RunShellTool
                 from core.tools.git import CloneRepositoryTool
 
+                # Inserir o novo tool de shell aqui para testes ou automação futura
+                shell_tool = RunShellTool()
+                
                 clone_tool = CloneRepositoryTool()
                 await clone_tool.execute(url=git_url)
                 await self._set_step_status(user_id, "clonagem", "✅")
@@ -321,6 +352,10 @@ class AgentController:
     async def _renderizar_card_status(self, contexto: QATestContext) -> str:
         """Gera a representação textual do Lifecycle Card."""
         l = contexto.lifecycle
+        
+        from datetime import datetime
+        # Formatação de data/hora sempre atualizada (runtime)
+        data_hora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")        
         return f"""📋 <b>Status de Automação: QAgent</b>
 ━━━━━━━━━━━━━━━━━━━━
 {l["clonagem"]} 📥 <b>Clonagem do Repositório</b>
@@ -329,6 +364,9 @@ class AgentController:
 {l["implementacao"]} 🛠️ <b>Implementação de Testes</b>
 {l["dashboard"]} 🎨 <b>Geração do Dashboard Analítico</b>
 {l["conclusao"]} ✅ <b>Conclusão e Relatório</b>
+━━━━━━━━━━━━━━━━━━━━
+<b>Data hora:</b> {data_hora}
+<b>LLM utilizada:</b> {contexto.llm_model}
 ━━━━━━━━━━━━━━━━━━━━
 _Acompanhe o progresso em tempo real._"""
 
@@ -472,9 +510,15 @@ _Acompanhe o progresso em tempo real._"""
                         f"[MEDICAO] Falha na instalação, tentando rodar mesmo assim"
                     )
 
+            # Instalação garantida de ferramentas de teste
+            await git_tool._run_command(
+                [sys.executable, "-m", "pip", "install", "pytest", "pytest-cov"],
+                cwd=repo_full_path,
+            )
+
             resultado_testes = await git_tool._run_command(
                 [
-                    "python",
+                    sys.executable,
                     "-m",
                     "pytest",
                     "--cov=.",
@@ -874,27 +918,37 @@ Você atingiu o limite de requests. Aguarde um momento e tente novamente.
             settings.TMP_DIR, f"testes_{contexto.repo_name}.md"
         )
 
+        skills_prompt = self._get_skills_prompt()
+
         system_prompt = f"""Você é o QAgent, especialista em QA e TESTES UNITÁRIOS.
 
-                    Tarefa: Criar um plano de testes unitários e implementá-los usando as Ferramentas fornecidas.
+{skills_prompt}
 
-    CHECKLIST ATUAL DO PROJETO:
-    {contexto.lifecycle}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                    OBJETIVO DA TAREFA
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Tarefa: Criar um plano de testes unitários e implementá-los usando as Ferramentas fornecidas.
 
-    CONTEXTO:
-    - Repositório: {contexto.repo_path}
-    - Estrutura: {contexto.estrutura}
-    - Frameworks: {contexto.frameworks}   
+CHECKLIST ATUAL DO PROJETO:
+{contexto.lifecycle}
 
-                    REGRAS ESTritas:
-                    1. Você NÃO PODE dar FINAL_ANSWER sem antes agir e usar as ferramentas.
-                    2. Use a ferramenta 'list_directory' ou 'read_file' para entender os arquivos fonte.
-                    3. Use a ferramenta 'write_file' para salvar os testes unitários.
-                    4. Use a ferramenta 'git_manage' com action='run_tests' para validar os testes.
+CONTEXTO:
+- Repositorio: {contexto.repo_path}
+- Estrutura: {contexto.estrutura}
+- Frameworks: {contexto.frameworks}
 
-                    PASSO 1 - PLANO:
-                    Crie um arquivo .md com as tasks de testes a serem criadas. Use a ferramenta 'write_file'.
-                    Arquivo deve ser salvo em: {tasks_md_path}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+                    REGRAS ESTRITAS DE EXECUÇÃO
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. Você NÃO PODE dar FINAL_ANSWER sem antes agir e usar as ferramentas.
+2. Use a ferramenta 'list_directory' ou 'read_file' para entender os arquivos fonte.
+3. Use a ferramenta 'write_file' para salvar os testes unitários.
+4. Use a ferramenta 'git_manage' com action='run_tests' para validar os testes.
+
+PASSO 1 - PLANO:
+Crie um arquivo .md com as tasks de testes a serem criadas. Use a ferramenta 'write_file'.
+Arquivo deve ser salvo em: {tasks_md_path}
+
 
                     Formato do arquivo .md:
                     # Plano de Testes Unitários
@@ -913,11 +967,16 @@ Você atingiu o limite de requests. Aguarde um momento e tente novamente.
                     Ambiente: {"Windows" if sys.platform == "win32" else "Linux"}
                     Base: {settings.BASE_DIR}
                     """
+        
+        # Inserir skills carregadas no prompt
+        skills_prompt = self._get_skills_prompt()
+        system_prompt += skills_prompt
 
         conversation_id = await MessageRepository.get_or_create_conversation(
             contexto.user_id
         )
         self.active_provider = available_providers[0]
+        await self._set_step_status(contexto.user_id, "implementacao", "🔄")
 
         loop = AgentLoop(
             conversation_id=conversation_id,
@@ -993,10 +1052,16 @@ NÃO DÊ FINAL_ANSWER APENAS COM O PLANO. VOCÊ DEVE ESCREVER O CÓDIGO DOS TEST
                         f"[RELATORIO] Falha na instalação, tentando rodar mesmo assim"
                     )
 
+            # Instalação garantida de ferramentas de teste
+            await git_tool._run_command(
+                [sys.executable, "-m", "pip", "install", "pytest", "pytest-cov"],
+                cwd=repo_full_path,
+            )
+
             try:
                 result = await git_tool._run_command(
                     [
-                        "python",
+                        sys.executable,
                         "-m",
                         "pytest",
                         "--cov=.",
@@ -1095,6 +1160,9 @@ NÃO DÊ FINAL_ANSWER APENAS COM O PLANO. VOCÊ DEVE ESCREVER O CÓDIGO DOS TEST
 
 📁 <b>Arquivos de código criados em:</b>
 <code>{contexto.repo_path}</code>
+
+📝 <b>Log do QA Relator_log gerado em:</b>
+<code>{contexto.repo_path}/log.md</code>
 
 ━━━━━━━━━━━━━━━━━━━━
 
@@ -1581,7 +1649,7 @@ NÃO DÊ FINAL_ANSWER APENAS COM O PLANO. VOCÊ DEVE ESCREVER O CÓDIGO DOS TEST
 
         if os.path.exists(os.path.join(repo_path, "pyproject.toml")):
             result = await git_tool._run_command(
-                ["python", "-m", "pip", "install", "-e", "."],
+                [sys.executable, "-m", "pip", "install", "-e", "."],
                 cwd=repo_path,
             )
             logging.info(f"[INSTALL] pip install -e . result: {result.returncode}")
@@ -1589,7 +1657,7 @@ NÃO DÊ FINAL_ANSWER APENAS COM O PLANO. VOCÊ DEVE ESCREVER O CÓDIGO DOS TEST
 
         if os.path.exists(os.path.join(repo_path, "setup.py")):
             result = await git_tool._run_command(
-                ["python", "-m", "pip", "install", "-e", "."],
+                [sys.executable, "-m", "pip", "install", "-e", "."],
                 cwd=repo_path,
             )
             logging.info(f"[INSTALL] pip install -e . result: {result.returncode}")
@@ -1597,7 +1665,7 @@ NÃO DÊ FINAL_ANSWER APENAS COM O PLANO. VOCÊ DEVE ESCREVER O CÓDIGO DOS TEST
 
         if os.path.exists(os.path.join(repo_path, "requirements.txt")):
             result = await git_tool._run_command(
-                ["python", "-m", "pip", "install", "-r", "requirements.txt"],
+                [sys.executable, "-m", "pip", "install", "-r", "requirements.txt"],
                 cwd=repo_path,
             )
             logging.info(
