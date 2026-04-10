@@ -20,6 +20,7 @@ from core.tools.repository import ReadFileTool, WriteFileTool
 from core.tools.shell import RunShellTool
 from aiogram import types
 import sys
+import traceback
 
 
 class TesteEstado(Enum):
@@ -342,6 +343,7 @@ class AgentController:
 
         except Exception as e:
             logging.error(f"Erro no fluxo de teste unitário: {e}")
+            traceback.print_exc()
             await self._set_step_status(user_id, "clonagem", "❌")
             await TelegramOutputHandler.send_response(
                 chat_id, f"❌ **Erro:** {str(e)}", parse_mode="HTML"
@@ -416,6 +418,7 @@ _Acompanhe o progresso em tempo real._"""
             )
         except Exception as e:
             logging.warning(f"Não foi possível editar mensagem: {e}")
+            traceback.print_exc()
             await bot.send_message(
                 contexto.chat_id,
                 "🔍 <b>Analisando estrutura do repositório...</b>",
@@ -993,7 +996,7 @@ Arquivo deve ser salvo em: {tasks_md_path}
 Crie testes unitários para o repositório {contexto.repo_path}. O caminho dos arquivos deve começar com {contexto.repo_path}.
 
 1. Primeiro, USE 'write_file' para o plano: {tasks_md_path}
-2. IMEDIATAMENTE DEPOIS, use 'read_file' em cascata para ler os fontes e 'write_file' para criar os testes em 'tests/'.
+2. IMEDIATAMENTE DEPOIS, use 'read_file' em cascata para ler os fontes e 'write_file' para criar os testes em '{contexto.repo_path}/tests/'.
 3. Por fim, USE 'git_manage' (run_tests) para validar e ver a cobertura real.
 
 NÃO DÊ FINAL_ANSWER APENAS COM O PLANO. VOCÊ DEVE ESCREVER O CÓDIGO DOS TESTES AGORA. E SÓ PARE QUANDO OS TESTES ESTIVEREM PASSANDO.
