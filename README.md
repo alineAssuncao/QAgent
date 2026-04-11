@@ -13,15 +13,18 @@ O QAgent foi projetado para ser 100% portátil. Ele utiliza caminhos dinâmicos 
 
 O QAgent evoluiu de um simples bot de chat para um **Agente Autônomo** com capacidades de decisão:
 
+-   **Arquitetura Multi-Agente Orquestrada**: Transição do modelo monolítico para um sistema de agentes especialistas (Analista, Coder, Tester) coordenados por um Orquestrador central.
+-   **Estratégia de Checkpointing Dual**: Resiliência total através da persistência de estado em Banco de Dados (SQLite) e visibilidade em tempo real via arquivo Markdown (`relatorio_testes_qagent.md`) no projeto alvo.
 -   **Engine ReAct (Reasoning and Acting)**: O bot planeja suas ações (Thought), executa ferramentas (Action) e analisa os resultados (Observation) antes de fornecer a resposta final.
 -   **Suporte a Repositórios Externos**: Capacidade de clonar qualquer repositório Git público para a pasta `/projects` e realizar análises profundas do código fonte.
--   **Gestão de Fila e Concorrência**: Sistema inteligente que permite enfileirar até 3 tarefas simultâneas, com menus interativos para priorização ou cancelamento.
+-   **Seleção Inteligente de Provedores**: Otimização de custo e performance através de um mapa de tarefas para modelos (ex: Gemini para lógica, DeepSeek/Local para verificação).
+-   **Gestão de Fila e Concorrência**: Sistema inteligente que permite enfileirar tarefas atômicas, garantindo continuidade mesmo após falhas técnicos ou de cota.
 -   **Workflows Estruturados (QA-First)**:
     1.  **Detecção Automática**: Links Git ativam o fluxo de análise.
-    2.  **Planejamento**: O Agente gera um plano de testes e espera a **aprovação do usuário** via botões.
-    3.  **Implementação**: Criação automática de testes unitários após aprovação.
-    4.  **Relatório Visual V3**: Geração automática de um Dashboard autossuficiente (`qa_coverage_dashboard.html`) com métricas hiper-densas, histórico de tendências e suporte multi-idioma (EN/PT-BR).
-    5.  **Finalização**: Opções interativas para **Commit**, **Push** e **Limpeza**.
+    2.  **Orquestração em Fila**: O projeto é quebrado em sub-tarefas (análise, criação de arquivos, testes) gerenciadas por uma fila persistente.
+    3.  **Checkpointing Visível**: Criação do arquivo `relatorio_testes_qagent.md` que serve como checklist de progresso para o usuário.
+    4.  **Implementação Multi-Persona**: Agentes especialistas (Coder e Tester) trabalham em paralelo para garantir foco e precisão.
+    5.  **Relatório Visual V3**: Dashboard autossuficiente com métricas, histórico de tendências e suporte multi-idioma.
 
 ## 📊 Dashboard Visual (Data-Dense Reporting)
 

@@ -10,8 +10,9 @@ from core.config import settings
 from typing import Optional, Dict, Any
 from core.provider import ProviderFactory, BaseProvider
 from core.loop import AgentLoop
-from core.middleware import rate_limiter
+from core.middleware import rate_limiter, provider_health
 from skills.loader import SkillLoader
+from core.personas import ANALYST_PERSONA, CODER_PERSONA, TESTER_PERSONA
 from memory.repository import MessageRepository
 from memory.database import Database
 from handlers.input import TelegramInputHandler
@@ -289,24 +290,10 @@ class AgentController:
                 await self._set_step_status(user_id, "clonagem", "✅")
                 contexto.repo_name = git_url.split("/")[-1].replace(".git", "")
                 contexto.repo_path = f"projects/{contexto.repo_name}"
-                from core.bot import bot
-
-                await bot.send_message(
-                    chat_id,
-                    f"✅ <b>Repositório clonado:</b> {contexto.repo_name}",
-                    parse_mode="HTML",
-                )
             else:
                 await self._set_step_status(user_id, "clonagem", "✅")
                 contexto.repo_name = local_path or "unknown"
                 contexto.repo_path = f"projects/{contexto.repo_name}"
-                from core.bot import bot
-
-                await bot.send_message(
-                    chat_id,
-                    f"✅ <b>Usando repositório local:</b> {contexto.repo_name}",
-                    parse_mode="HTML",
-                )
 
             await self._analisar_repositorio(contexto, user_id, message)
 
@@ -355,6 +342,9 @@ _Acompanhe o progresso em tempo real._"""
                 )
                 return
             except Exception as e:
+                error_str = str(e).lower()
+                if "not modified" in error_str or "retry after" in error_str:
+                    return
                 logging.warning(f"Não foi possível editar mensagem, enviando nova: {e}")
 
         try:
@@ -365,6 +355,20 @@ _Acompanhe o progresso em tempo real._"""
         except Exception as e:
             logging.warning(f"Não foi possível enviar mensagem de status: {e}")
 
+    async def _safe_edit(
+        self, message: types.Message, text: str, parse_mode: str = "HTML"
+    ):
+        """Tenta editar uma mensagem de forma segura, enviando uma nova se falhar."""
+        from core.bot import bot
+
+        try:
+            await message.edit_text(text, parse_mode=parse_mode)
+        except Exception:
+            try:
+                await bot.send_message(message.chat.id, text, parse_mode=parse_mode)
+            except Exception as e:
+                logging.error(f"Falha crítica ao enviar mensagem (safe_edit): {e}")
+
     async def _analisar_repositorio(
         self, contexto: QATestContext, user_id: int, message: types.Message
     ):
@@ -374,34 +378,9 @@ _Acompanhe o progresso em tempo real._"""
 
         from core.tools.skills import SkillActivationTool
 
-        try:
-            await message.edit_text(
-                "🔍 <b>Analisando estrutura do repositório...</b>", parse_mode="HTML"
-            )
-        except Exception as e:
-            logging.warning(f"Não foi possível editar mensagem: {e}")
-            traceback.print_exc()
-            await bot.send_message(
-                contexto.chat_id,
-                "🔍 <b>Analisando estrutura do repositório...</b>",
-                parse_mode="HTML",
-            )
-
         list_tool = ListDirectoryTool()
         estrutura = await list_tool.execute(path=contexto.repo_path)
         contexto.estrutura = estrutura
-
-        try:
-            await message.edit_text(
-                "🛠️ <b>Detectando frameworks de teste...</b>", parse_mode="HTML"
-            )
-        except Exception as e:
-            logging.warning(f"Não foi possível editar mensagem: {e}")
-            await bot.send_message(
-                contexto.chat_id,
-                "🛠️ <b>Detectando frameworks de teste...</b>",
-                parse_mode="HTML",
-            )
 
         git_tool = GitManagementTool()
         frameworks = await git_tool.execute(
@@ -442,119 +421,100 @@ _Acompanhe o progresso em tempo real._"""
                 del self.contextos[user_id]
             return
 
-        try:
-            await message.edit_text(
-                "📊 <b>Executando testes atuais para medir cobertura...</b>",
-                parse_mode="HTML",
-            )
-        except Exception as e:
-            logging.warning(f"Não foi possível editar mensagem: {e}")
-            await bot.send_message(
-                contexto.chat_id,
-                "📊 <b>Executando testes atuais para medir cobertura...</b>",
-                parse_mode="HTML",
-            )
-
         repo_full_path = os.path.join(settings.BASE_DIR, contexto.repo_path)
+
+        # GARANTIR QUE A PASTA TESTS EXISTA
+        tests_path = os.path.join(repo_full_path, "tests")
+        if not os.path.exists(tests_path):
+            logging.info(f"[ANALISE] Criando pasta de testes: {tests_path}")
+            os.makedirs(tests_path, exist_ok=True)
+            # Criar um __init__.py se for Python para garantir que seja um pacote
+            if "python" in str(frameworks).lower():
+                init_file = os.path.join(tests_path, "__init__.py")
+                if not os.path.exists(init_file):
+                    with open(init_file, "w") as f:
+                        f.write("")
 
         has_tests = self._check_has_tests(repo_full_path)
 
-        if has_tests:
-            needs_install = self._check_needs_install(repo_full_path)
-            if needs_install:
-                logging.info(
-                    f"[MEDICAO] Projeto precisa de instalação. Instalando dependências..."
+        needs_install = self._check_needs_install(repo_full_path)
+        if needs_install:
+            logging.info(
+                f"[MEDICAO] Projeto precisa de instalação. Instalando dependências..."
+            )
+            install_result = await self._install_project_dependencies(repo_full_path)
+            if install_result:
+                logging.info(f"[MEDICAO] Instalação concluída com sucesso")
+            else:
+                logging.warning(
+                    f"[MEDICAO] Falha na instalação, tentando rodar mesmo assim"
                 )
-                install_result = await self._install_project_dependencies(
-                    repo_full_path
-                )
-                if install_result:
-                    logging.info(f"[MEDICAO] Instalação concluída com sucesso")
-                else:
-                    logging.warning(
-                        f"[MEDICAO] Falha na instalação, tentando rodar mesmo assim"
-                    )
 
-            resultado_testes = await git_tool._run_command(
-                [
-                    "python",
-                    "-m",
-                    "pytest",
-                    "--cov=.",
-                    "--cov-report=term",
-                    "--maxfail=5",
-                ],
-                cwd=repo_full_path,
-            )
-            resultado_testes_str = f"{'✅ Sucesso' if resultado_testes.returncode == 0 else '❌ Falha'}:\n{resultado_testes.stdout}\n{resultado_testes.stderr}"
-        else:
-            resultado_testes_str = (
-                "Nenhum teste encontrado no projeto. Testes precisam ser criados."
-            )
+        resultado_testes = await git_tool._run_command(
+            [
+                "python",
+                "-m",
+                "pytest",
+                "--cov=.",
+                "--cov-report=term",
+                "--maxfail=5",
+            ],
+            cwd=repo_full_path,
+        )
+        resultado_testes_str = f"{'✅ Sucesso' if resultado_testes.returncode == 0 else '❌ Falha'}:\n{resultado_testes.stdout}\n{resultado_testes.stderr}"
 
         contexto.resultado_testes_antes_bruto = resultado_testes_str
 
         cobertura = self._extrair_cobertura(resultado_testes_str)
         contexto.cobertura_inicial = cobertura
 
+        # INICIALIZAR JSON LOG COM COBERTURA INICIAL (Requisito: Guardar resultado inicial no .json)
+        await self._inicializar_json_log(contexto)
+
         contexto.recomendacoes = self._gerar_recomendacoes(estrutura, frameworks)
 
         await self._set_step_status(user_id, "medicao_inicial", "✅")
 
-        relatorio = f"""📊 <b>RELATÓRIO DE ANÁLISE</b>
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-🏷️ <b>Nome do Projeto:</b> {contexto.repo_name}
-
-📈 <b>Cobertura de Testes Atual:</b> {contexto.cobertura_inicial}
-
-🗣️ <b>Linguagem de Programação:</b>
-{self._extrair_linguagem(contexto.frameworks)}
-
-🔧 <b>Ferramentas para Testes Unitários:</b>
-{self._extrair_frameworks(contexto.frameworks)}
-
-⚠️ <b>Pré-Requisitos Necessários:</b>
-{self._extrair_prerequisitos(contexto.frameworks)}
-
-💡 <b>O que pode ser melhorado para 100% de cobertura:</b>
-{contexto.recomendacoes}
-
-━━━━━━━━━━━━━━━━━━━━━━━━━━
-
-✅ <b>Iniciando a criação automática dos testes unitários...</b>
-"""
-
-        await TelegramOutputHandler.send_response(
-            contexto.chat_id, relatorio, parse_mode="HTML"
-        )
-
         await self._continuar_execucao(user_id)
 
     def _extrair_cobertura(self, output_testes: str) -> str:
+        if not output_testes:
+            return "0%"
+
         padroes_cobertura = [
+            r"TOTAL\s+\d+\s+\d+\s+(?:\d+\s+\d+\s+)?(\d+)%",
+            r"TOTAL\s+.*?\s+(\d+)%",
             r"(\d+)%\s*coverage",
             r"coverage.*?(\d+)%",
             r"(\d+)%\s*covered",
             r"COVERAGE.*?(\d+)%",
             r"Total.*?(\d+)%",
-            r"Branch.*?(\d+)%",
-            r"TOTAL\s+\d+\s+\d+\s+\d+\s+\d+\s+(\d+)%",
         ]
 
-        output_lower = output_testes.lower()
+        output_clean = re.sub(r"\x1b\[[0-9;]*m", "", output_testes)
+        output_lower = output_clean.lower()
+
         for padrao in padroes_cobertura:
-            match = re.search(padrao, output_lower)
+            match = re.search(
+                padrao, output_lower if "TOTAL" not in padrao else output_clean
+            )
             if match:
                 return f"{match.group(1)}%"
 
         if "failed" in output_lower or "error" in output_lower:
+            # Tenta encontrar qualquer porcentagem no final do log como fallback
+            fallback = re.findall(r"(\d+)%", output_lower)
+            if fallback:
+                return f"{fallback[-1]}%"
             return "0% (testes falhando)"
-        elif "passed" in output_lower or "ok" in output_lower:
+
+        # Só retorna o placeholder se houver evidência de que testes realmente passaram
+        if re.search(r"\d+\s+passed", output_lower) or re.search(
+            r"OK\s*\(", output_clean
+        ):
             return "~10-30% (execução OK, cobertura não medida)"
 
-        return "Não detectada"
+        return "0%"
 
     def _indicador(self, percentual: int) -> str:
         if percentual < 70:
@@ -639,12 +599,27 @@ _Acompanhe o progresso em tempo real._"""
         breakdown = data.get("breakdown", [])
         coverage_data = data.get("coverage", {})
         coverage_total = coverage_data.get("after", 0)
+        tests_data = data.get("tests", {})
 
         # Tenta pegar totais de linhas se disponíveis no root ou no breakdown
         total_stmts = 0
         total_miss = 0
 
         if not breakdown:
+            total_exec = tests_data.get("total_executed", 0)
+            failed = tests_data.get("failures", 0)
+            passed = tests_data.get("passed", 0)
+            
+            if total_exec > 0:
+                return (
+                    f"⚠️ <b>Testes falharam antes da coleta final de cobertura.</b>\n\n"
+                    f"🧪 <b>Resumo dos Testes:</b>\n"
+                    f"• Executados: {total_exec}\n"
+                    f"• Passaram: {passed}\n"
+                    f"• Falharam: {failed}\n\n"
+                    f"<i>Consulte qa_coverage_dashboard.html para mais detalhes.</i>"
+                )
+            
             return "⚠️ <b>Dados de coverage não encontrados no log estruturado.</b>"
 
         linhas = []
@@ -748,16 +723,6 @@ _Acompanhe o progresso em tempo real._"""
         contexto.estado = TesteEstado.EXECUTANDO
         contexto.erro_encontrado = False
 
-        await TelegramOutputHandler.send_response(
-            contexto.chat_id,
-            "🚀 <b>Iniciando implementação dos testes unitários...</b>",
-            parse_mode="HTML",
-        )
-
-        contexto.progresso_task = asyncio.create_task(
-            self._enviar_progresso_periodico(user_id)
-        )
-
         try:
             await self._implementar_testes(contexto)
             await self._set_step_status(user_id, "implementacao", "✅")
@@ -784,36 +749,48 @@ _Acompanhe o progresso em tempo real._"""
                 or "Payment Required" in erro_msg
                 or "Insufficient Balance" in erro_msg
             ):
-                mensagem_amigavel = """❌ <b>Ops! Problema de crédito</b>
+                mensagem_amigavel = "<b>Ops! Problema de credito</b>"
+            await self._set_step_status(user_id, "implementacao", "✅")
 
-━━━━━━━━━━━━━━━━━━━━
-Seu crédito de API esgotou. Para continuar:
+            if contexto.progresso_task and not contexto.progresso_task.done():
+                contexto.progresso_task.cancel()
 
-💳 <b>Opção 1:</b> Adicione créditos no DeepSeek
-🌐 <b>Opção 2:</b> Configure outro provedor no .env
-🔑 <b>Opção 3:</b> Verifique sua chave da API
+            await self._gerar_relatorio_final(user_id)
+            await self._set_step_status(user_id, "conclusao", "✅")
 
-━━━━━━━━━━━━━━━━━━━━
-O teste foi cancelado por falta de crédito."""
+        except asyncio.CancelledError:
+            await TelegramOutputHandler.send_response(
+                contexto.chat_id,
+                "❌ <b>Execução cancelada pelo usuário.</b>",
+                parse_mode="HTML",
+            )
+        except Exception as e:
+            logging.error(f"Erro na implementação: {e}")
+            contexto.erro_encontrado = True
+
+            erro_msg = str(e)
+            if (
+                "402" in erro_msg
+                or "Payment Required" in erro_msg
+                or "Insufficient Balance" in erro_msg
+            ):
+                mensagem_amigavel = """<b>Ops! Problema de credito</b>
+
+--------------------------------
+Seu credito de API esgotou. Para continuar:
+
+<b>Opcao 1:</b> Adicione creditos no DeepSeek
+<b>Opcao 2:</b> Configure outro provedor no .env
+<b>Opcao 3:</b> Verifique sua chave da API
+
+--------------------------------
+O teste foi cancelado por falta de credito."""
             elif "429" in erro_msg or "Too Many Requests" in erro_msg:
-                mensagem_amigavel = """❌ <b>Ops! Many requests</b>
-
-━━━━━━━━━━━━━━━━━━━━
-Os provedores de IA estão com limite excedido no momento.
-
-⏱️ <b>Aguarde alguns minutos</b> e tente novamente.
-━━━━━━━━━━━━━━━━━━━━
-O teste foi cancelado temporariamente."""
+                mensagem_amigavel = "<b>Ops! Many requests - limite excedido</b>"
             elif "RateLimitError" in erro_msg:
-                mensagem_amigavel = """❌ <b>Limite de requisições atingido</b>
-
-━━━━━━━━━━━━━━━━━━━━
-Você atingiu o limite de requests. Aguarde um momento e tente novamente.
-
-⏱️ <b>Dica:</b> O limite deve ser resetado em alguns minutos.
-━━━━━━━━━━━━━━━━━━━━"""
+                mensagem_amigavel = "<b>Limite de requisicoes atingido</b>"
             else:
-                mensagem_amigavel = f"❌ <b>Erro durante implementação:</b> {str(e)}"
+                mensagem_amigavel = f"<b>Erro durante implementacao:</b> {str(e)}"
 
             await TelegramOutputHandler.send_response(
                 contexto.chat_id,
@@ -827,123 +804,227 @@ Você atingiu o limite de requests. Aguarde um momento e tente novamente.
                     contexto.progresso_task.cancel()
                 del self.contextos[user_id]
 
-    async def _enviar_progresso_periodico(self, user_id: int):
-        contexto = self.contextos.get(user_id)
-        if not contexto:
-            return
-
+    async def _sync_project_report(self, contexto: QATestContext, task_id: int):
+        """Sincroniza o Banco de Dados com o arquivo test_plan_qagent.md no projeto."""
+        subtasks = await MessageRepository.get_pending_subtasks(task_id)
+        db = await Database.get_instance()
+        cursor = await db.execute(
+            "SELECT module_path, type, status, result_log FROM project_subtasks WHERE parent_task_id = ? ORDER BY id ASC",
+            (task_id,)
+        )
+        all_subtasks = await cursor.fetchall()
+        
+        report_path = os.path.join(settings.BASE_DIR, contexto.repo_path, "test_plan_qagent.md")
+        
+        content = "# 📋 Plano de Testes e Execuções - QAgent\n\n"
+        content += f"**Projeto:** {contexto.repo_name}\n"
+        content += f"**Data:** {datetime.now().strftime('%d/%m/%Y %H:%M')}\n\n"
+        content += "## 🛠️ Checklist de Tarefas\n\n"
+        
+        for i, (module, ttype, status, log) in enumerate(all_subtasks, 1):
+            if status == "completed":
+                check = "[V]"
+            elif status == "failed":
+                check = "[X]"
+            else:
+                check = "[ ]"
+                
+            content += f"{i}. {check} **{ttype.capitalize()}**: `{module}`\n"
+            if log and status == "failed":
+                content += f"    > ⚠️ Erro: {log[:150]}...\n"
+        
+        content += f"\n\n---\n*Atualizado automaticamente pelo QAgent - Inteligência em QA*"
+        
         try:
-            while True:
-                await asyncio.sleep(120)
+            with open(report_path, "w", encoding="utf-8") as f:
+                f.write(content)
+        except Exception as e:
+            logging.error(f"Erro ao sincronizar relatório Markdown: {e}")
 
-                if contexto.erro_encontrado or not contexto.start_time:
-                    break
-
-                tempo_decorrido = (datetime.now() - contexto.start_time).seconds // 60
-
-                await TelegramOutputHandler.send_response(
-                    contexto.chat_id,
-                    f"⏳  <b>Em andamento há {tempo_decorrido} minutos...</b>\n\n"
-                    "Os testes unitários ainda estão sendo implementados.\n"
-                    "Aguarde mais um momento por favor.",
-                    parse_mode="HTML",
-                )
-
-        except asyncio.CancelledError:
-            pass
-
-    async def _implementar_testes(self, contexto: QATestContext):
+    async def _executar_agente_especialista(self, contexto: QATestContext, task_id: int, ptype: str, system_prompt: str, user_input: str):
+        """Helper para rodar uma sub-tarefa com um agente especialista."""
+        available_providers = await ProviderFactory.get_best_provider_for_task(ptype)
+        if not available_providers:
+            available_providers = await ProviderFactory.get_all_available_providers()
+            
+        active_provider = available_providers[0]
+        
         from core.tools.repository import ListDirectoryTool, ReadFileTool, WriteFileTool
         from core.tools.git_management import GitManagementTool
         from core.tools.skills import SkillActivationTool
-
-        available_providers = await ProviderFactory.get_all_available_providers()
-        if not available_providers:
-            raise Exception("Nenhum provedor de IA disponível")
-
-        tools = [
-            ListDirectoryTool(),
-            ReadFileTool(),
-            WriteFileTool(),
-            GitManagementTool(),
-            SkillActivationTool(self.skill_loader),
-        ]
-
         from core.tools.manager import ToolManager
-
-        tool_manager = ToolManager(tools)
-
-        tasks_md_path = os.path.join(
-            settings.TMP_DIR, f"testes_{contexto.repo_name}.md"
-        )
-
-        system_prompt = f"""Você é o QAgent, especialista em QA e TESTES UNITÁRIOS.
-
-                    Tarefa: Criar um plano de testes unitários e implementá-los usando as Ferramentas fornecidas.
-
-    CHECKLIST ATUAL DO PROJETO:
-    {contexto.lifecycle}
-
-    CONTEXTO:
-    - Repositório: {contexto.repo_path}
-    - Estrutura: {contexto.estrutura}
-    - Frameworks: {contexto.frameworks}   
-
-                    REGRAS ESTritas:
-                    1. Você NÃO PODE dar FINAL_ANSWER sem antes agir e usar as ferramentas.
-                    2. Use a ferramenta 'list_directory' ou 'read_file' para entender os arquivos fonte.
-                    3. Use a ferramenta 'write_file' para salvar os testes unitários.
-                    4. Use a ferramenta 'git_manage' com action='run_tests' para validar os testes.
-
-                    PASSO 1 - PLANO:
-                    Crie um arquivo .md com as tasks de testes a serem criadas. Use a ferramenta 'write_file'.
-                    Arquivo deve ser salvo em: {tasks_md_path}
-
-                    Formato do arquivo .md:
-                    # Plano de Testes Unitários
-
-                    ## Tasks de Teste
-                    1. [ ] Testar classe X - método Y
-                    2. [ ] Testar função Z
-
-                    PASSO 2 - IMPLEMENTAÇÃO:
-                    Leia os arquivos fonte (read_file) e crie/salve os arquivos de teste correspondentes no diretório correto (write_file).
-
-                    PASSO 3 - EXECUÇÃO:
-                    Execute os testes usando a ferramenta 'git_manage' com action='run_tests'.
-                    Apenas depois disso você pode responder com FINAL_ANSWER.
-
-                    Ambiente: {"Windows" if sys.platform == "win32" else "Linux"}
-                    Base: {settings.BASE_DIR}
-                    """
-
-        conversation_id = await MessageRepository.get_or_create_conversation(
-            contexto.user_id
-        )
-        self.active_provider = available_providers[0]
+        
+        tools = [
+            ListDirectoryTool(), ReadFileTool(), WriteFileTool(),
+            GitManagementTool(), SkillActivationTool(self.skill_loader)
+        ]
+        
+        conversation_id = await MessageRepository.get_or_create_conversation(contexto.user_id)
+        
+        # Mapeamento de Personas e ícones para o status
+        persona_icons = {
+            "analise": "🔍 Analista",
+            "codificacao": "🤖 Coder",
+            "verificacao": "🧪 Tester"
+        }
+        persona_label = persona_icons.get(ptype, ptype.capitalize())
 
         loop = AgentLoop(
             conversation_id=conversation_id,
-            provider=self.active_provider,
-            tool_manager=tool_manager,
+            provider=active_provider,
+            tool_manager=ToolManager(tools),
             status_callback=lambda text: self._set_step_status(
-                contexto.user_id, "implementacao", text
+                contexto.user_id, 
+                "implementacao", 
+                f"{persona_label} | {text} | ☁️ {loop.current_provider_name}"
             ),
-            available_providers=available_providers,
+            available_providers=available_providers
         )
+        
+        # Limitar iterações: Coder precisa de no máximo 10 (ler + escrever + corrigir)
+        if ptype == "codificacao":
+            loop.max_iterations = 10
+        
+        return await loop.run(user_input, system_prompt)
 
-        user_input = f"""ATIVIDADE CRÍTICA: OBRIGATÓRIO COMPLETAR O CICLO.
+    async def _descobrir_arquivos_para_teste(self, contexto: QATestContext) -> list:
+        """Descobre arquivos .py testáveis varrendo o filesystem diretamente (sem LLM).
+        
+        Retorna caminhos relativos ao diretório base do QAgent (ex: 'projects/flask/src/flask/app.py').
+        """
+        import glob
+        repo_abs = os.path.abspath(contexto.repo_path)
+        base_abs = os.path.abspath(str(settings.BASE_DIR))
+        
+        # Buscar todos os .py no repositório
+        all_py = glob.glob(os.path.join(repo_abs, "**", "*.py"), recursive=True)
+        
+        # Filtrar: excluir testes, __init__, setup, configs, migrations
+        exclude_patterns = [
+            "test", "__init__", "setup", "conftest", "manage", 
+            "migration", "wsgi", "asgi", "__pycache__", ".git",
+            "docs", "examples", "venv", "node_modules"
+        ]
+        
+        valid_files = []
+        for f in all_py:
+            filename = os.path.basename(f).lower()
+            full_lower = f.lower().replace("\\", "/")
+            
+            # Pular arquivos que correspondem aos padrões de exclusão
+            if any(pat in full_lower for pat in exclude_patterns):
+                continue
+            
+            # Converter para caminho relativo ao BASE_DIR
+            try:
+                rel_path = os.path.relpath(f, base_abs).replace("\\", "/")
+            except ValueError:
+                continue
+            
+            valid_files.append(rel_path)
+        
+        # Limitar a 10 arquivos para não sobrecarregar o Coder
+        valid_files = valid_files[:10]
+        
+        logging.info(f"[ANALISTA-FS] Encontrados {len(valid_files)} arquivos testáveis: {valid_files}")
+        return valid_files
 
-Crie testes unitários para o repositório {contexto.repo_path}. O caminho dos arquivos deve começar com {contexto.repo_path}.
+    async def _implementar_testes(self, contexto: QATestContext):
+        """Novo fluxo de implementação multi-agente orquestrado."""
+        user_id = contexto.user_id
+        
+        # 1. Garantir que temos uma task principal no DB
+        conversation_id = await MessageRepository.get_or_create_conversation(user_id)
+        db = await Database.get_instance()
+        cursor = await db.execute(
+            "INSERT INTO tasks (user_id, conversation_id, status, input_text) VALUES (?, ?, 'running', ?) RETURNING id",
+            (user_id, conversation_id, f"Auto QA: {contexto.repo_name}")
+        )
+        row = await cursor.fetchone()
+        task_id = row[0]
+        await db.commit()
 
-1. Primeiro, USE 'write_file' para o plano: {tasks_md_path}
-2. IMEDIATAMENTE DEPOIS, use 'read_file' em cascata para ler os fontes e 'write_file' para criar os testes em '{contexto.repo_path}/tests/'.
-3. Por fim, USE 'git_manage' (run_tests) para validar e ver a cobertura real.
+        # 2. Fase de Descoberta (DETERMINÍSTICA — sem ReAct loop)
+        await self._set_step_status(user_id, "implementacao", "🔍 Analista | Mapeando projeto... | 📂 Filesystem")
+        
+        paths = await self._descobrir_arquivos_para_teste(contexto)
+        
+        if not paths:
+            logging.warning(f"Analista não encontrou arquivos .py testáveis em {contexto.repo_path}")
+            await TelegramOutputHandler.send_response(
+                contexto.chat_id, 
+                "⚠️ Nenhum arquivo .py testável encontrado no projeto. Verifique a estrutura do repositório."
+            )
+            return
+        
+        logging.info(f"[ANALISTA] Arquivos encontrados para testes: {paths}")
+        await self._set_step_status(user_id, "implementacao", f"🔍 Analista | ✅ {len(paths)} arquivo(s) mapeado(s)")
 
-NÃO DÊ FINAL_ANSWER APENAS COM O PLANO. VOCÊ DEVE ESCREVER O CÓDIGO DOS TESTES AGORA. E SÓ PARE QUANDO OS TESTES ESTIVEREM PASSANDO.
-"""
+        for p in paths:
+            await MessageRepository.create_subtask(task_id, p, "codificacao")
 
-        await loop.run(user_input, system_prompt)
+        await self._sync_project_report(contexto, task_id)
+
+        # 3. Loop de Orquestração (apenas codificação usa LLM)
+        while True:
+            pending = await MessageRepository.get_pending_subtasks(task_id)
+            if not pending:
+                break
+                
+            task = pending[0]
+            await MessageRepository.update_subtask_status(task['id'], 'running')
+            await self._sync_project_report(contexto, task_id)
+            
+            try:
+                # Fase CODER: usar OpenAI via ReAct loop
+                prompt = CODER_PERSONA.format(module_path=task['module_path'], repo_path=contexto.repo_path)
+                await self._set_step_status(user_id, "implementacao", f"🤖 Coder | ✍️ Escrevendo testes para {os.path.basename(task['module_path'])}")
+                
+                res = await self._executar_agente_especialista(
+                    contexto, task_id, 'codificacao', prompt, 
+                    f"Crie os testes unitários para o arquivo {task['module_path']}. Use read_file para ler o código-fonte primeiro, depois write_file para salvar os testes."
+                )
+                
+                await MessageRepository.update_subtask_status(task['id'], 'completed', res[:500])
+                
+            except Exception as e:
+                logging.error(f"Erro na sub-tarefa {task['id']}: {e}")
+                await MessageRepository.update_subtask_status(task['id'], 'failed', str(e))
+                
+            await self._sync_project_report(contexto, task_id)
+        
+        # 4. Fase TESTER: Verificação determinística (sem LLM)
+        await self._set_step_status(user_id, "implementacao", "🧪 Tester | Rodando pytest... | 📂 Local")
+        
+        import subprocess
+        project_abs = os.path.abspath(contexto.repo_path)
+        try:
+            result = subprocess.run(
+                ["python", "-m", "pytest", 
+                 f"--rootdir={project_abs}",
+                 "--override-ini=asyncio_mode=auto",
+                 "--cov=.", "--cov-report=term", 
+                 "--maxfail=5", "-v"],
+                cwd=project_abs,
+                capture_output=True, text=True, timeout=120
+            )
+            test_output = result.stdout + result.stderr
+            passed = result.returncode == 0
+            
+            log_msg = f"✅ Testes passaram" if passed else f"❌ Testes falharam (exit code: {result.returncode})"
+            logging.info(f"[TESTER] {log_msg}\n{test_output[:500]}")
+            await self._set_step_status(user_id, "implementacao", f"🧪 Tester | {log_msg}")
+            
+        except subprocess.TimeoutExpired:
+            logging.error("[TESTER] Timeout ao executar pytest (120s)")
+            await self._set_step_status(user_id, "implementacao", "🧪 Tester | ⏰ Timeout")
+        except Exception as e:
+            logging.error(f"[TESTER] Erro ao executar pytest: {e}")
+
+        # 5. Finalização
+        await self._set_step_status(user_id, "implementacao", "✅ Orquestração concluída.")
+
+    # Deprecated method: logic moved to _implementar_testes (multi-agent)
 
     async def _gerar_relatorio_final(self, user_id: int):
         import logging
@@ -971,93 +1052,80 @@ NÃO DÊ FINAL_ANSWER APENAS COM O PLANO. VOCÊ DEVE ESCREVER O CÓDIGO DOS TEST
         has_tests = self._check_has_tests(repo_full_path)
         logging.info(f"[RELATORIO] Has tests: {has_tests}")
 
-        if not has_tests:
+        needs_install = self._check_needs_install(repo_full_path)
+        if needs_install:
             logging.info(
-                f"[RELATORIO] Nenhum teste encontrado. O agente deve criar os testes."
+                f"[RELATORIO] Projeto precisa de instalação. Instalando dependências..."
             )
-            contexto.cobertura_final = "0% (testes a serem criados)"
-        else:
-            logging.info(
-                f"[RELATORIO] Executando testes diretamente em {repo_full_path}"
+            install_result = await self._install_project_dependencies(repo_full_path)
+            if install_result:
+                logging.info(f"[RELATORIO] Instalação concluída")
+            else:
+                logging.warning(
+                    f"[RELATORIO] Falha na instalação, tentando rodar mesmo assim"
+                )
+
+        try:
+            result = await git_tool._run_command(
+                [
+                    "python",
+                    "-m",
+                    "pytest",
+                    f"--rootdir={repo_full_path}",
+                    "--override-ini=asyncio_mode=auto",
+                    "--cov=.",
+                    "--cov-report=term",
+                    "--maxfail=5",
+                ],
+                cwd=repo_full_path,
             )
+            resultado_testes = f"{'✅ Sucesso' if result.returncode == 0 else '❌ Falha'}:\n{result.stdout}\n{result.stderr}"
+        except Exception as e:
+            logging.warning(f"[RELATORIO] Erro ao executar testes: {e}")
+            resultado_testes = f"Erro: {str(e)}"
 
-            needs_install = self._check_needs_install(repo_full_path)
-            if needs_install:
-                logging.info(
-                    f"[RELATORIO] Projeto precisa de instalação. Instalando dependências..."
-                )
-                install_result = await self._install_project_dependencies(
-                    repo_full_path
-                )
-                if install_result:
-                    logging.info(f"[RELATORIO] Instalação concluída")
-                else:
-                    logging.warning(
-                        f"[RELATORIO] Falha na instalação, tentando rodar mesmo assim"
-                    )
+        logging.info(
+            f"[RELATORIO] resultado_testes: {resultado_testes[:500] if resultado_testes else 'VAZIO'}"
+        )
 
-            try:
-                result = await git_tool._run_command(
-                    [
-                        "python",
-                        "-m",
-                        "pytest",
-                        "--cov=.",
-                        "--cov-report=term",
-                        "--maxfail=5",
-                    ],
-                    cwd=repo_full_path,
-                )
-                resultado_testes = f"{'✅ Sucesso' if result.returncode == 0 else '❌ Falha'}:\n{result.stdout}\n{result.stderr}"
-            except Exception as e:
-                logging.warning(f"[RELATORIO] Erro ao executar testes: {e}")
-                resultado_testes = f"Erro: {str(e)}"
+        contexto.resultado_testes_depois_bruto = resultado_testes
 
-            logging.info(
-                f"[RELATORIO] resultado_testes: {resultado_testes[:500] if resultado_testes else 'VAZIO'}"
-            )
-
-            contexto.resultado_testes_depois_bruto = resultado_testes
-
-            cobertura_final = self._extrair_cobertura(resultado_testes)
-            logging.info(f"[RELATORIO] cobertura_final extraida: {cobertura_final}")
-            contexto.cobertura_final = cobertura_final
+        cobertura_final = self._extrair_cobertura(resultado_testes)
+        logging.info(f"[RELATORIO] cobertura_final extraida: {cobertura_final}")
+        contexto.cobertura_final = cobertura_final
 
         tempo_total = 0
         if contexto.start_time:
             tempo_total = (datetime.now() - contexto.start_time).seconds // 60
 
-        tasks_md_path = os.path.join(
-            settings.TMP_DIR, f"testes_{contexto.repo_name}.md"
+        # Buscar as tasks reais geradas para marcar no relatório
+        db = await Database.get_instance()
+        cursor = await db.execute(
+            """
+            SELECT module_path, status 
+            FROM project_subtasks 
+            WHERE parent_task_id = (SELECT id FROM tasks WHERE user_id = ? ORDER BY id DESC LIMIT 1)
+            ORDER BY id ASC
+            """,
+            (user_id,)
         )
-        tasks_info = ""
-        if os.path.exists(tasks_md_path):
-            with open(tasks_md_path, "r", encoding="utf-8") as f:
-                tasks_info = f.read()
+        subtasks = await cursor.fetchall()
 
-        caminho_relatorio_projeto = os.path.join(
-            settings.BASE_DIR, contexto.repo_path, "relatorio_testes_qagent.md"
-        )
-        conteudo_relatorio = f"""# Relatório de Testes Automatizados - QAgent
+        tasks_md = "## 🛠️ Checklist de Tarefas\n\n"
+        if not subtasks:
+            tasks_md += "Nenhuma tarefa registrada no banco de dados.\n"
+        else:
+            for i, (module, status) in enumerate(subtasks, 1):
+                if status == "completed":
+                    check = "[V]"
+                elif status == "failed":
+                    check = "[X]"
+                else:
+                    check = "[ ]"
+                tasks_md += f"{i}. {check} Criar e validar testes para `{module}`\n"
 
-**Projeto:** {contexto.repo_name}
-**Data:** {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
-**Tempo de Execução:** {tempo_total} minutos
 
-## Resultado de Cobertura
-- **Cobertura Inicial:** {contexto.cobertura_inicial}
-- **Cobertura Final:** {contexto.cobertura_final}
-
-                                ## Plano de Testes Executado (Resumo de Tasks)
-                                {tasks_info}
-                                """
-        try:
-            with open(caminho_relatorio_projeto, "w", encoding="utf-8") as f:
-                f.write(conteudo_relatorio)
-        except Exception as e:
-            logging.error(f"Erro ao salvar o relatório dentro do projeto: {e}")
-
-        # Geração do Dashboard Visual
+        # 1. Dashboard Visual Gerado Primeiro
         try:
             await self._set_step_status(user_id, "dashboard", "🔄")
             await self._gerar_dashboard(contexto, tempo_total)
@@ -1066,7 +1134,7 @@ NÃO DÊ FINAL_ANSWER APENAS COM O PLANO. VOCÊ DEVE ESCREVER O CÓDIGO DOS TEST
             logging.error(f"Erro na fase de geração do Dashboard: {e}")
             await self._set_step_status(user_id, "dashboard", "❌")
 
-        # Tenta carregar dados do JSON para um relatório visual superior
+        # 2. Tenta carregar dados do JSON para um relatório visual superior
         json_data = self._carregar_dados_json_log(contexto.repo_path)
         if json_data:
             resumo = self._gerar_resumo_visual_json(json_data)
@@ -1074,6 +1142,35 @@ NÃO DÊ FINAL_ANSWER APENAS COM O PLANO. VOCÊ DEVE ESCREVER O CÓDIGO DOS TEST
             resumo = self._extrair_resumo_coverage(
                 contexto.resultado_testes_depois_bruto
             )
+
+        # Transformar marcadores HTML do resumo do Telegram em Markdown
+        resumo_md = resumo.replace("<b>", "**").replace("</b>", "**").replace("<i>", "*").replace("</i>", "*")
+
+        # 3. Gravar arquivo Markdown final contendo o Resumo
+        caminho_relatorio_projeto = os.path.join(
+            settings.BASE_DIR, contexto.repo_path, "relatorio_testes_qagent.md"
+        )
+        
+        conteudo_relatorio = f"""# Relatório de Testes Automatizados - QAgent
+
+**Projeto:** {contexto.repo_name}
+**Data:** {datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+**Tempo de Execução:** {tempo_total} minutos
+
+## 🧪 Resumo e Cobertura
+{resumo_md}
+
+{tasks_md}
+
+## 📊 Dashboard Analítico
+- Um dashboard visual interativo também foi gerado.
+- Você pode abri-lo pelo seguinte caminho: `{contexto.repo_path}/qa_coverage_dashboard.html`
+"""
+        try:
+            with open(caminho_relatorio_projeto, "w", encoding="utf-8") as f:
+                f.write(conteudo_relatorio)
+        except Exception as e:
+            logging.error(f"Erro ao salvar o relatório dentro do projeto: {e}")
 
         relatorio = f"""✅ <b>TESTES UNITÁRIOS CONCLUÍDOS</b>
 
@@ -1095,6 +1192,9 @@ NÃO DÊ FINAL_ANSWER APENAS COM O PLANO. VOCÊ DEVE ESCREVER O CÓDIGO DOS TEST
 
 📑 <b>Relatório detalhado exportado em:</b>
 <code>{contexto.repo_path}/relatorio_testes_qagent.md</code>
+
+📊 <b>Dashboard interativo exportado em:</b>
+<code>{contexto.repo_path}/qa_coverage_dashboard.html</code>
 
 📁 <b>Arquivos de código criados em:</b>
 <code>{contexto.repo_path}</code>
@@ -1284,62 +1384,85 @@ NÃO DÊ FINAL_ANSWER APENAS COM O PLANO. VOCÊ DEVE ESCREVER O CÓDIGO DOS TEST
         match = re.search(r"(\d+(?:\.\d+)?)", str(coverage_str))
         return float(match.group(1)) if match else 0.0
 
-    def _generate_insight_en(
-        self, tests_info: dict, cov_before: float, cov_after: float
-    ) -> str:
-        passed = tests_info.get("passed", 0)
-        failed = tests_info.get("failed", 0)
-        total = tests_info.get("total_created", 0)
-
-        if failed > 0:
-            return f"Test suite executed: {passed} passed, {failed} failed out of {total} tests. Coverage: {cov_after}%"
-        elif passed > 0:
-            return f"All {passed} tests passed successfully. Coverage improved from {cov_before}% to {cov_after}%"
-        else:
-            return f"Test generation completed. {total} test cases created. Note: Test execution may need manual verification."
-
     def _generate_insight_pt(
         self, tests_info: dict, cov_before: float, cov_after: float
     ) -> str:
         passed = tests_info.get("passed", 0)
         failed = tests_info.get("failed", 0)
-        total = tests_info.get("total_created", 0)
+        total = tests_info.get("total_created", 0) or (passed + failed)
 
         if failed > 0:
-            return f"Suite de testes executada: {passed} passaram, {failed} falharam de {total} testes. Cobertura: {cov_after}%"
+            return f"⚠️ ATENÇÃO: {failed} testes falharam. A cobertura consta como {cov_after}% (ou 0%) porque a coleta de métricas foi interrompida pelas falhas. Corrija os testes para ver o relatório completo."
         elif passed > 0:
-            return f"Todos os {passed} testes passaram com sucesso. Cobertura melhorou de {cov_before}% para {cov_after}%"
+            return f"✅ Todos os {passed} testes passaram com sucesso! Cobertura melhorou de {cov_before}% para {cov_after}%."
         else:
-            return f"Geração de testes concluída. {total} casos de teste criados. Nota: Execução pode precisar de verificação manual."
+            return f"⚠️ Nenhum teste foi executado ou coletado corretamente. Verifique a configuração do projeto."
+
+    def _generate_insight_en(
+        self, tests_info: dict, cov_before: float, cov_after: float
+    ) -> str:
+        passed = tests_info.get("passed", 0)
+        failed = tests_info.get("failed", 0)
+        total = tests_info.get("total_created", 0) or (passed + failed)
+
+        if failed > 0:
+            return f"⚠️ WARNING: {failed} tests failed. Coverage is shown as {cov_after}% (or 0%) because metrics collection was aborted. Fix the tests to see the full report."
+        elif passed > 0:
+            return f"✅ All {passed} tests passed successfully! Coverage improved from {cov_before}% to {cov_after}%."
+        else:
+            return f"⚠️ No tests were executed or collected properly. Check project configuration."
 
     def _parse_test_logs(self, logs: str) -> dict:
+        if not logs:
+            return {
+                "total": 0,
+                "executed": 0,
+                "failed": 0,
+                "passed": 0,
+                "coverage": 0.0,
+            }
+
+        # Limpar cores ANSI
+        logs = re.sub(r"\x1b\[[0-9;]*m", "", logs)
+
         total = len(re.findall(r"test_", logs))
-        failed = len(re.findall(r"FAILED|ERROR|FAIL", logs, re.IGNORECASE))
 
-        passed_match = re.findall(r"(\d+) failed.*?(\d+) passed", logs, re.IGNORECASE)
-        if passed_match:
-            failed = int(passed_match[0][0])
-            passed = int(passed_match[0][1])
-        else:
-            passed_match = re.findall(r"(\d+) passed", logs, re.IGNORECASE)
-            passed = int(passed_match[0]) if passed_match else 0
-            if passed == 0 and "passed" in logs.lower():
-                passed = len(re.findall(r"PASSED", logs))
-
-        coverage_match = re.search(
-            r"(\d+)%\s*(?:coverage|covered)", logs, re.IGNORECASE
+        # Tenta pegar do sumário do pytest: "1 failed, 2 passed in 0.05s"
+        summary_match = re.search(
+            r"((?P<failed>\d+) failed)?.*?,?\s*((?P<passed>\d+) passed)?",
+            logs,
+            re.IGNORECASE,
         )
-        if not coverage_match:
-            coverage_match = re.search(r"TOTAL\s+\d+\s+\d+\s+(\d+)%", logs)
-        coverage = float(coverage_match.group(1)) if coverage_match else 0.0
+
+        failed = 0
+        passed = 0
+
+        if summary_match:
+            groups = summary_match.groupdict()
+            failed = int(groups.get("failed") or 0)
+            passed = int(groups.get("passed") or 0)
+
+        # Fallback se o sumário não for literal (ex: crash no meio)
+        if failed == 0 and passed == 0:
+            failed = len(re.findall(r"FAILED|ERROR", logs))
+            passed = len(re.findall(r"PASSED|\[PASS\]", logs))
+
+        coverage_str = self._extrair_cobertura(logs)
+        coverage = self._parse_coverage(coverage_str)
 
         return {
-            "total": total,
+            "total": total or (passed + failed),
             "executed": passed + failed,
             "failed": failed,
             "passed": passed,
             "coverage": coverage,
         }
+
+    def _parse_coverage(self, coverage_str: str) -> float:
+        if not coverage_str:
+            return 0.0
+        match = re.search(r"(\d+(?:\.\d+)?)", str(coverage_str))
+        return float(match.group(1)) if match else 0.0
 
     async def _load_history_trend(
         self, read_tool: ReadFileTool, output_path: str
@@ -1643,3 +1766,56 @@ NÃO DÊ FINAL_ANSWER APENAS COM O PLANO. VOCÊ DEVE ESCREVER O CÓDIGO DOS TEST
                 "other": max(0, 100 - (gen_time + exec_time)),
             },
         }
+
+    async def _inicializar_json_log(self, contexto: QATestContext):
+        """Inicializa o arquivo JSON de métricas com a cobertura inicial."""
+        import json
+        import logging
+        from datetime import datetime
+
+        json_log_path = os.path.join(
+            settings.BASE_DIR, contexto.repo_path, "qagent_metrics_log.json"
+        )
+
+        coverage_before = self._parse_coverage(contexto.cobertura_inicial)
+
+        data = {
+            "metadata": {
+                "run_id": f"QA-RUN-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+                "timestamp": datetime.now().isoformat(),
+                "repo": contexto.repo_name,
+            },
+            "coverage": {
+                "before": coverage_before,
+                "after": coverage_before,
+                "delta_absolute": 0.0,
+                "delta_percentual": 0.0,
+            },
+            "tests": {
+                "total_created": 0,
+                "total_executed": 0,
+                "failed": 0,
+                "passed": 0,
+            },
+            "insights": {
+                "en": ["Initial analysis completed."],
+                "pt": ["Análise inicial concluída."],
+            },
+            "history_trend": {
+                "labels": [datetime.now().strftime("%d/%m %H:%M")],
+                "cov_before": [coverage_before],
+                "cov_after": [coverage_before],
+                "tests_exec": [0],
+                "tests_fail": [0],
+                "gen_time": [0],
+                "exec_time": [0],
+            },
+        }
+
+        try:
+            os.makedirs(os.path.dirname(json_log_path), exist_ok=True)
+            with open(json_log_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, indent=2, ensure_ascii=False)
+            logging.info(f"[ANALISE] JSON log inicializado em: {json_log_path}")
+        except Exception as e:
+            logging.error(f"[ANALISE] Erro ao inicializar JSON log: {e}")

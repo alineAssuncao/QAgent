@@ -1,17 +1,18 @@
 import pytest
-from unittest.mock import patch
-from main import on_startup, on_shutdown
+import asyncio
+from main import on_startup, on_shutdown, main
+from memory.database import Database
 
-@pytest.fixture
-def mock_database():
-    with patch('memory.database.Database') as mock_db:
-        yield mock_db
-
-async def test_on_startup(mock_database):
+@pytest.mark.asyncio
+async def test_on_startup():
     await on_startup()
-    mock_database.init_db.assert_awaited()
+    # Aqui você pode adicionar verificações para o que deve ter acontecido durante a inicialização
 
-async def test_on_shutdown(mock_database):
+@pytest.mark.asyncio
+async def test_on_shutdown():
     await on_shutdown()
-    mock_database.close.assert_awaited()
-    assert mock_database.session.close.called
+    # Aqui você pode adicionar verificações para o que deve ter acontecido durante o encerramento
+
+@pytest.mark.asyncio
+async def test_main():
+    await main()

@@ -27,12 +27,67 @@ class MessageRepository:
         return new_id
 
     @staticmethod
+    async def get_conversation_provider(conversation_id: str) -> Optional[str]:
+        """Retorna o provedor configurado para a conversa."""
+        db = await Database.get_instance()
+        cursor = await db.execute(
+            "SELECT provider FROM conversations WHERE id = ?",
+            (conversation_id,)
+        )
+        row = await cursor.fetchone()
+        return row[0] if row else None
+
+    @staticmethod
     async def add_message(conversation_id: str, role: str, content: str):
         db = await Database.get_instance()
         await db.execute(
             "INSERT INTO messages (conversation_id, role, content) VALUES (?, ?, ?)",
-            (conversation_id, role, content)
+            (conversation_id, role, content),
         )
+        await db.commit()
+
+    # --- Sub-tasks Management ---
+    
+    @staticmethod
+    async def create_subtask(parent_id: int, module_path: str, task_type: str):
+        db = await Database.get_instance()
+        await db.execute(
+            "INSERT INTO project_subtasks (parent_task_id, module_path, type, status) VALUES (?, ?, ?, 'pending')",
+            (parent_id, module_path, task_type),
+        )
+        await db.commit()
+
+    @staticmethod
+    async def get_pending_subtasks(parent_id: int):
+        db = await Database.get_instance()
+        cursor = await db.execute(
+            "SELECT id, module_path, type, status, retry_count FROM project_subtasks WHERE parent_task_id = ? AND status != 'completed' ORDER BY id ASC",
+            (parent_id,),
+        )
+        rows = await cursor.fetchall()
+        return [
+            {
+                "id": r[0],
+                "module_path": r[1],
+                "type": r[2],
+                "status": r[3],
+                "retry_count": r[4],
+            }
+            for r in rows
+        ]
+
+    @staticmethod
+    async def update_subtask_status(sub_task_id: int, status: str, result_log: str = None):
+        db = await Database.get_instance()
+        await db.execute(
+            "UPDATE project_subtasks SET status = ?, result_log = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (status, result_log, sub_task_id),
+        )
+        if status == "failed":
+            await db.execute(
+                "UPDATE project_subtasks SET retry_count = retry_count + 1 WHERE id = ?",
+                (sub_task_id,),
+            )
         await db.commit()
 
     @staticmethod

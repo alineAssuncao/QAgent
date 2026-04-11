@@ -28,6 +28,11 @@ class AgentLoop:
             status_callback
         )
 
+    @property
+    def current_provider_name(self) -> str:
+        """Retorna o nome do provedor sendo utilizado no momento."""
+        return self.provider.name if self.provider else "Desconhecido"
+
     async def _update_status(self, text: str):
         """Helper para enviar atualizações de status via callback e log."""
         logging.info(f"[AGENT_STATUS] {text}")
@@ -62,6 +67,7 @@ Ferramentas Disponíveis:
 {tools_str}
 
 Lembre-se: Sempre use 'FINAL_ANSWER:' para concluir sua tarefa.
+VOCÊ NÃO PODE GERAR O BLOCO 'Observation:'. O sistema fornecerá a observação após o seu 'Action Input:'. Pare de gerar texto imediatamente após 'Action Input:'.
 """
         system_prompt = f"{system_prompt_base}\n{react_instructions}"
 
@@ -71,8 +77,17 @@ Lembre-se: Sempre use 'FINAL_ANSWER:' para concluir sua tarefa.
             self.conversation_id, limit=settings.MEMORY_WINDOW_SIZE
         )
 
+        # Sanitizar histórico: remover alucinações de Observation: de mensagens do assistant
+        sanitized_history = []
+        for msg in history:
+            content = msg["content"]
+            if msg["role"] == "assistant" and "Observation:" in content:
+                # Remove o bloco de observação e tudo depois dele na mensagem do assistant
+                content = content.split("Observation:")[0].strip()
+            sanitized_history.append({"role": msg["role"], "content": content})
+
         # O contexto inicial (System + Mensagens anteriores)
-        messages = [{"role": "system", "content": system_prompt}] + history
+        messages = [{"role": "system", "content": system_prompt}] + sanitized_history
 
         current_iteration = 0
         final_answer = (
@@ -160,11 +175,61 @@ Lembre-se: Sempre use 'FINAL_ANSWER:' para concluir sua tarefa.
                     "Falha crítica: Provedor não retornou conteúdo após tentativas de fallback."
                 )
 
+            logging.info(
+                f"[DEBUG] Resposta completa do modelo:\n{response_content[:1000]}..."
+            )
+
+            # 3.5 Prevenção de Alucinação: Truncar se o modelo tentar gerar sua própria Observation
+            if "Observation:" in response_content:
+                logging.warning("[AGENT_LOOP] Alucinação detectada: o modelo tentou gerar sua própria Observation. Truncando resposta.")
+                response_content = response_content.split("Observation:")[0].strip()
+
             # Adicionar a resposta do assistente ao contexto do loop
             messages.append({"role": "assistant", "content": response_content})
 
             # 4. Verificar se é uma Resposta Final
             if "FINAL_ANSWER:" in response_content:
+                # Verificar se o modelo executou ações antes do FINAL_ANSWER
+                has_action_before_final = (
+                    "Action:" in response_content.split("FINAL_ANSWER:")[0]
+                )
+
+                # Verificar se o modelo executou ações de escrita de código (não apenas .md)
+                has_code_write = False
+                for msg in messages:
+                    if msg["role"] == "assistant" and "write_file" in msg["content"]:
+                        # Se contiver write_file, verifica se não é apenas para arquivos .md ou logs
+                        content = msg["content"].lower()
+                        # Extrair o path do Action Input usando regex para ser mais preciso
+                        path_matches = re.findall(r'"path":\s*"([^"]+)"', content)
+                        for p in path_matches:
+                            if not p.endswith(".md") and not p.endswith(".log") and not p.endswith(".txt"):
+                                has_code_write = True
+                                break
+                    if has_code_write: break
+
+                # No Agente Analista, não exigimos escrita de código REAL (.py)
+                is_analyst = "AGENTE ANALISTA" in system_prompt_base
+                
+                # Analista: aceitar FINAL_ANSWER imediatamente (ele só lista arquivos)
+                if is_analyst:
+                    final_answer = response_content.split("FINAL_ANSWER:")[-1].strip()
+                    await self._update_status("✅ Análise concluída.")
+                    break
+                
+                # Coder/Tester: exigir que tenha executado ações E escrito código .py
+                if not has_code_write and "test" in user_input.lower():
+                    await self._update_status(
+                        "⚠️ Implantação de código não detectada. Solicitando continuação..."
+                    )
+                    messages.append(
+                        {
+                            "role": "user",
+                            "content": "ATIVIDADE CRÍTICA: OBRIGATÓRIO usar a ferramenta 'write_file' para criar o arquivo de testes .py FISICAMENTE antes de dar FINAL_ANSWER. NÃO apenas descreva o código, ESCREVA-O com write_file.",
+                        }
+                    )
+                    continue
+
                 final_answer = response_content.split("FINAL_ANSWER:")[-1].strip()
                 await self._update_status("✅ Resposta final gerada.")
                 break
@@ -207,13 +272,54 @@ Lembre-se: Sempre use 'FINAL_ANSWER:' para concluir sua tarefa.
                     obs_message = f"Observation: {observation}"
                     messages.append({"role": "user", "content": obs_message})
                     logging.info(f"OBSERVATION: {str(observation)[:200]}...")
+                
+                # FALLBACK: Tentar parsear JSON puro (modelo retornou {"action": "tool", ...})
+                elif self.tool_manager:
+                    json_parsed = False
+                    # Limpar markdown code fences se existirem
+                    clean = response_content.strip()
+                    if clean.startswith("```"):
+                        clean = re.sub(r"^```\w*\n?", "", clean)
+                        clean = re.sub(r"\n?```$", "", clean).strip()
+                    
+                    try:
+                        data = json.loads(clean)
+                        if isinstance(data, dict) and "action" in data:
+                            tool_name = data.pop("action")
+                            # Remover campos duplicados/inválidos
+                            tool_args = {k: v for k, v in data.items() if k != "action"}
+                            
+                            await self._update_status(f"🛠️ Executando: {tool_name}")
+                            logging.info(f"[JSON-FALLBACK] ACTION: {tool_name}({tool_args})")
+
+                            observation = await self.tool_manager.call_tool(
+                                tool_name, tool_args
+                            )
+
+                            obs_message = f"Observation: {observation}"
+                            messages.append({"role": "user", "content": obs_message})
+                            logging.info(f"OBSERVATION: {str(observation)[:200]}...")
+                            json_parsed = True
+                    except (json.JSONDecodeError, TypeError):
+                        pass
+                    
+                    if not json_parsed:
+                        if current_iteration < self.max_iterations:
+                            await self._update_status("🔄 Refinando raciocínio...")
+                            messages.append(
+                                {
+                                    "role": "user",
+                                    "content": "IMPORTANTE: Use EXATAMENTE este formato:\nThought: [seu raciocínio]\nAction: [nome_da_ferramenta]\nAction Input: {\"param\": \"valor\"}\n\nFerramentas: read_file, write_file, list_directory, git_manage",
+                                }
+                            )
+                        else:
+                            final_answer = response_content
                 else:
                     if current_iteration < self.max_iterations:
-                        await self._update_status("🔄 Refinando raciocínio...")
                         messages.append(
                             {
                                 "role": "user",
-                                "content": "Por favor, continue seu raciocínio usando o formato ReAct ou forneça a FINAL_ANSWER se já tiver concluído.",
+                                "content": "Por favor, continue usando o formato ReAct ou forneça a FINAL_ANSWER.",
                             }
                         )
                     else:

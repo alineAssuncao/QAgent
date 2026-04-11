@@ -22,14 +22,13 @@ class RateLimitError(Exception):
         self.provider_name = provider_name
 
 
-# ══════════════════════════════════════════════════════════════
 # TIMEOUTS (em segundos)
 # ══════════════════════════════════════════════════════════════
 LLM_REQUEST_TIMEOUT = (
     180  # Timeout por chamada ao LLM (3 minutos para projetos maiores)
 )
 LLM_CONNECT_TIMEOUT = 10  # Timeout de conexão
-LM_STUDIO_TIMEOUT = 900  # Local é mais lento, timeout maior
+LM_STUDIO_TIMEOUT = 60  # Reduzido de 1200 para 60 para fallback rápido
 
 
 class BaseProvider(ABC):
@@ -46,6 +45,41 @@ class BaseProvider(ABC):
         pass
 
 
+class OllamaProvider(BaseProvider):
+    def __init__(self, base_url: str, model_name: str):
+        super().__init__("Ollama", model_name)
+        self.client = AsyncOpenAI(
+            base_url=f"{base_url}/v1",
+            api_key="ollama",
+            timeout=LLM_REQUEST_TIMEOUT,
+        )
+        self.base_url = base_url
+
+    async def is_available(self) -> bool:
+        try:
+            async with httpx.AsyncClient() as client:
+                response = await client.get(f"{self.base_url}/api/tags", timeout=5.0)
+                if response.status_code != 200:
+                    return False
+                data = response.json()
+                models = [m.get("name", "") for m in data.get("models", [])]
+                return self.model_name in models
+        except Exception:
+            return False
+
+    async def generate_response(self, messages: List[Dict[str, str]]) -> str:
+        try:
+            response = await asyncio.wait_for(
+                self.client.chat.completions.create(
+                    model=self.model_name, messages=messages
+                ),
+                timeout=LLM_REQUEST_TIMEOUT,
+            )
+            return response.choices[0].message.content
+        except asyncio.TimeoutError:
+            raise TimeoutError(f"Ollama não respondeu em {LLM_REQUEST_TIMEOUT}s")
+
+
 class LMStudioProvider(BaseProvider):
     def __init__(self, base_url: str, model_name: str):
         super().__init__("LM Studio (Local)", model_name)
@@ -55,30 +89,12 @@ class LMStudioProvider(BaseProvider):
             timeout=LM_STUDIO_TIMEOUT,
         )
         self.base_url = base_url
-        self._cached_models = None
-
-    async def _get_loaded_models(self) -> List[str]:
-        if self._cached_models is not None:
-            return self._cached_models
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(f"{self.base_url}/models", timeout=2.0)
-                if response.status_code != 200:
-                    self._cached_models = []
-                    return []
-                data = response.json()
-                self._cached_models = [m.get("id", "") for m in data.get("data", [])]
-                return self._cached_models
-        except Exception:
-            self._cached_models = []
-            return []
 
     async def is_available(self) -> bool:
         try:
-            loaded_models = await self._get_loaded_models()
-            if not loaded_models:
-                return False
-            return self.model_name in loaded_models
+            async with httpx.AsyncClient() as client:
+                response = await client.get(f"{self.base_url}/models", timeout=5.0)
+                return response.status_code == 200
         except Exception:
             return False
 
@@ -97,7 +113,7 @@ class LMStudioProvider(BaseProvider):
 
 class GeminiProvider(BaseProvider):
     def __init__(self, api_key: str):
-        super().__init__("Google Gemini", "models/gemini-2.5-flash")
+        super().__init__("Google Gemini", "gemini-2.0-flash")
         self.client = genai.Client(api_key=api_key)
         self.api_key = api_key
 
@@ -105,46 +121,44 @@ class GeminiProvider(BaseProvider):
         return bool(self.api_key)
 
     async def generate_response(self, messages: List[Dict[str, str]]) -> str:
+        # Separar instrução de sistema e formatar mensagens
+        system_instruction = None
+        genai_contents = []
+        
+        for msg in messages:
+            role = msg["role"]
+            content = msg["content"]
+            
+            if role == "system":
+                # O novo SDK prefere system_instruction separado
+                system_instruction = content
+            else:
+                role = "model" if role == "assistant" else "user"
+                # Evitar mensagens consecutivas com o mesmo papel (Gemini não permite)
+                if genai_contents and genai_contents[-1]["role"] == role:
+                    genai_contents[-1]["parts"][0]["text"] += f"\n\n{content}"
+                else:
+                    genai_contents.append({"role": role, "parts": [{"text": content}]})
+
         try:
-            # ── Converter formato OpenAI → Gemini com contexto completo ──
-            # O SDK genai aceita uma lista de Content objects ou strings.
-            # Montamos o prompt com TODO o histórico, não apenas a última msg.
-            contents = []
-
-            # System prompt vai como instrução inicial
-            system_parts = []
-            for msg in messages:
-                if msg["role"] == "system":
-                    system_parts.append(msg["content"])
-
-            # Mensagens de conversa (user + assistant + observations)
-            for msg in messages:
-                if msg["role"] == "system":
-                    continue
-                role = "user" if msg["role"] in ("user",) else "model"
-                contents.append(
-                    genai.types.Content(
-                        role=role,
-                        parts=[genai.types.Part(text=msg["content"])],
-                    )
-                )
-
-            # Se não há contents de conversa, usar apenas o prompt direto
-            if not contents:
-                contents = messages[-1]["content"]
-
-            # Config com system instruction
-            config = None
-            if system_parts:
-                config = genai.types.GenerateContentConfig(
-                    system_instruction="\n".join(system_parts),
-                )
+            # Configuração da chamada
+            kwargs = {
+                "model": self.model_name,
+                "config": {"temperature": 0.7}
+            }
+            if system_instruction:
+                kwargs["config"]["system_instruction"] = system_instruction
+            
+            # Se houver apenas uma mensagem de conteúdo, simplificar
+            if len(genai_contents) == 1 and genai_contents[0]["role"] == "user":
+                kwargs["contents"] = genai_contents[0]["parts"][0]["text"]
+            else:
+                kwargs["contents"] = genai_contents
 
             response = await asyncio.wait_for(
-                self.client.aio.models.generate_content(
-                    model=self.model_name,
-                    contents=contents,
-                    config=config,
+                asyncio.to_thread(
+                    self.client.models.generate_content,
+                    **kwargs
                 ),
                 timeout=LLM_REQUEST_TIMEOUT,
             )
@@ -172,7 +186,7 @@ class OpenAICompatibleProvider(BaseProvider):
     ):
         if not model_name:
             model_name = (
-                "gpt-3.5-turbo" if "openai" in name.lower() else "deepseek-chat"
+                "gpt-4o-mini" if "openai" in name.lower() else "deepseek-chat"
             )
         super().__init__(name, model_name)
         self.client = AsyncOpenAI(
@@ -210,29 +224,16 @@ class OpenAICompatibleProvider(BaseProvider):
 
 class ProviderFactory:
     @staticmethod
-    async def get_all_available_providers() -> List[BaseProvider]:
+    async def get_all_available_providers(
+        preferred_name: Optional[str] = None,
+    ) -> List[BaseProvider]:
         providers = []
 
-        # 1. LM Studio (Prioridade Local) - adiciona todos os modelos disponíveis
-        if settings.LM_STUDIO_MODELS:
-            models = [
-                m.strip() for m in settings.LM_STUDIO_MODELS.split(",") if m.strip()
-            ]
-            for model_name in models:
-                lm_studio = LMStudioProvider(settings.LM_STUDIO_BASE_URL, model_name)
-                if await lm_studio.is_available() and provider_health.is_healthy(
-                    "LM Studio"
-                ):
-                    providers.append(lm_studio)
-
-        # 2. Ollama (Prioridade Local Secundária)
-        if settings.OLLAMA_MODELS:
-            ollama_model = settings.OLLAMA_MODELS.split(",")[0].strip()
-            ollama = OllamaProvider(settings.OLLAMA_BASE_URL, ollama_model)
-            if await ollama.is_available() and provider_health.is_healthy("Ollama"):
-                providers.append(ollama)
-            else:
-                provider_health.mark_unhealthy("Ollama")
+        # 1. OpenAI (Prioridade — tem créditos)
+        if settings.OPENAI_API_KEY:
+            openai_prov = OpenAICompatibleProvider(api_key=settings.OPENAI_API_KEY)
+            if await openai_prov.is_available() and provider_health.is_healthy("OpenAI"):
+                providers.append(openai_prov)
 
         # 2. Gemini
         if settings.GEMINI_API_KEY:
@@ -241,10 +242,29 @@ class ProviderFactory:
                 "Google Gemini"
             ):
                 providers.append(gemini)
-            else:
-                provider_health.mark_unhealthy("Google Gemini")
 
-        # 3. OpenRouter
+        # 3. LM Studio (Local)
+        if settings.LM_STUDIO_MODELS:
+            models = [
+                m.strip() for m in settings.LM_STUDIO_MODELS.split(",") if m.strip()
+            ]
+            for model_name in models:
+                lm_studio = LMStudioProvider(
+                    settings.LM_STUDIO_BASE_URL, model_name or ""
+                )
+                if await lm_studio.is_available() and provider_health.is_healthy(
+                    "LM Studio"
+                ):
+                    providers.append(lm_studio)
+
+        # 4. Ollama
+        if settings.OLLAMA_MODELS:
+            ollama_model = settings.OLLAMA_MODELS.split(",")[0].strip()
+            ollama = OllamaProvider(settings.OLLAMA_BASE_URL, ollama_model)
+            if await ollama.is_available() and provider_health.is_healthy("Ollama"):
+                providers.append(ollama)
+
+        # 5. OpenRouter
         if settings.OPENROUTER_API_KEY and settings.OPENROUTER_MODEL:
             openrouter = OpenAICompatibleProvider(
                 api_key=settings.OPENROUTER_API_KEY,
@@ -256,10 +276,8 @@ class ProviderFactory:
                 "OpenRouter"
             ):
                 providers.append(openrouter)
-            else:
-                provider_health.mark_unhealthy("OpenRouter")
 
-        # 4. DeepSeek
+        # 6. DeepSeek
         if settings.DEEPSEEK_API_KEY:
             deepseek = OpenAICompatibleProvider(
                 api_key=settings.DEEPSEEK_API_KEY,
@@ -268,23 +286,64 @@ class ProviderFactory:
             )
             if await deepseek.is_available() and provider_health.is_healthy("DeepSeek"):
                 providers.append(deepseek)
-            else:
-                provider_health.mark_unhealthy("DeepSeek")
 
-        # 4. OpenAI
-        if settings.OPENAI_API_KEY:
-            openai = OpenAICompatibleProvider(api_key=settings.OPENAI_API_KEY)
-            if await openai.is_available() and provider_health.is_healthy("OpenAI"):
-                providers.append(openai)
-            else:
-                provider_health.mark_unhealthy("OpenAI")
+        # Priorização
+        if preferred_name:
+            matching = [
+                p for p in providers if preferred_name.lower() in p.name.lower()
+            ]
+            non_matching = [
+                p for p in providers if preferred_name.lower() not in p.name.lower()
+            ]
+            providers = matching + non_matching
 
         return providers
 
     @staticmethod
+    async def get_best_provider_for_task(
+        task_type: str, preferred_name: Optional[str] = None
+    ) -> List[BaseProvider]:
+        """Retorna provedores otimizados para o tipo de tarefa."""
+        all_providers = await ProviderFactory.get_all_available_providers(preferred_name)
+        if not all_providers:
+            return []
+
+        if task_type in ["analise", "codificacao"]:
+            # Prioriza o Provedor Padrão (OpenAI se configurado) ou Gemini
+            pref = preferred_name or settings.DEFAULT_PROVIDER
+            primary = [p for p in all_providers if pref.lower() in p.name.lower()]
+            
+            # Se não encontrou o primário, tenta Gemini como segunda opção de inteligência
+            if not primary and "gemini" not in pref.lower():
+                primary = [p for p in all_providers if "gemini" in p.name.lower()]
+                
+            others = [p for p in all_providers if p not in primary]
+            return primary + others
+        elif task_type in ["teste", "verificacao"]:
+            # Prioriza Econômicos
+            econ = [
+                p
+                for p in all_providers
+                if any(
+                    x in p.name.lower()
+                    for x in ["studio", "ollama", "deepseek", "openrouter"]
+                )
+            ]
+            others = [
+                p
+                for p in all_providers
+                if not any(
+                    x in p.name.lower()
+                    for x in ["studio", "ollama", "deepseek", "openrouter"]
+                )
+            ]
+            return econ + others
+
+        return all_providers
+
+    @staticmethod
     async def get_active_provider() -> BaseProvider:
-        """Apenas para retrocompatibilidade, retorna o primeiro disponível."""
         available = await ProviderFactory.get_all_available_providers()
         if available:
             return available[0]
-        raise Exception("Nenhum provedor de IA disponível ou configurado corretamente.")
+        raise Exception("Nenhum provedor de IA disponível.")

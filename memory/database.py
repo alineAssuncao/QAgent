@@ -47,7 +47,7 @@ class Database:
             )
         """)
 
-        # Tabela de Tarefas (Fila e Status)
+        # Tabela de Tarefas Principal
         await db.execute("""
             CREATE TABLE IF NOT EXISTS tasks (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -55,16 +55,25 @@ class Database:
                 conversation_id TEXT,
                 status TEXT NOT NULL DEFAULT 'pending', -- 'pending', 'running', 'completed', 'cancelled'
                 input_text TEXT NOT NULL,
-                tasks_planned TEXT, -- Resumo do que será feito
+                tasks_planned TEXT,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        
-        # Migração simples: Adicionar coluna se não existir (para evitar erros em bases já criadas)
-        try:
-            await db.execute("ALTER TABLE tasks ADD COLUMN tasks_planned TEXT")
-        except:
-            pass
+
+        # Tabela de Sub-tarefas do Projeto (Fila de Orquestração)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS project_subtasks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                parent_task_id INTEGER NOT NULL,
+                module_path TEXT NOT NULL,
+                type TEXT NOT NULL, -- 'analise', 'codificacao', 'teste', 'verificacao'
+                status TEXT NOT NULL DEFAULT 'pending', -- 'pending', 'running', 'completed', 'failed'
+                result_log TEXT,
+                retry_count INTEGER DEFAULT 0,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (parent_task_id) REFERENCES tasks (id)
+            )
+        """)
         
         await db.commit()
         logging.info("Banco de Dados inicializado e tabelas verificadas.")

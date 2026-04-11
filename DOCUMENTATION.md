@@ -110,11 +110,16 @@ graph LR
 
 ### 5 Diferenças Fundamentais
 
-#### 1. 🔒 Privacidade por Design
-Nenhum concorrente oferece análise de código **completamente local**. O código-fonte nunca sai da máquina do usuário. Os LLMs recebem apenas prompts de contexto (trechos de código), nunca repositórios inteiros. Isso é um deal-breaker para empresas em setores regulados (financeiro, saúde, governo).
+#### 1. 🔒 Privacidade e Resiliência
+Nenhum concorrente oferece análise de código **completamente local** aliada a um sistema de **Checkpointing Dual**. Se a internet cair ou o token acabar, o progresso é salvo no SQLite e espelhado em Markdown. Isso permite que a automação continue de onde parou usando qualquer outro provedor disponível.
 
-#### 2. 🧠 Agente Autônomo vs. Ferramenta Passiva
-O QAgent não é uma ferramenta que "espera comandos". Ele é um **agente que pensa**:
+#### 2. 🧠 Orquestração Multi-Agente vs. Loop Monolítico
+O QAgent evoluiu para um modelo de delegacia:
+- **Manager**: Gerencia a fila de tarefas no banco de dados.
+- **Analista**: Mapeia o projeto e define o que precisa de teste.
+- **Coder**: Focado exclusivamente na escrita de código funcional.
+- **Tester**: Valida a execução e a cobertura.
+Esta separação reduz o "ruído" no contexto e aumenta dramaticamente a precisão da IA.
 
 ```
 Copilot:    Usuário digita → IA sugere código → Usuário aceita/rejeita
@@ -156,42 +161,33 @@ graph TB
         OUTPUT[TelegramOutputHandler<br>Texto • Áudio • Docs]
     end
 
-    subgraph "🧠 Core & Orquestração"
-        CTRL[AgentController<br>Facade Principal]
-        LOOP[AgentLoop<br>Engine ReAct]
-        TOOLS[ToolManager<br>Registry de Tools]
-        PROV[ProviderFactory<br>Multi-LLM]
+    subgraph "🧠 Core: Orquestração Multi-Agente"
+        CTRL[AgentController<br>Manager / Orquestrador]
+        LOOP[AgentLoop<br>Engine Worker ReAct]
+        PERS[Personas<br>Analyst, Coder, Tester]
+        PROV[ProviderFactory<br>Seleção por Tarefa]
     end
 
-    subgraph "🎯 Skills (Markdown Plugins)"
+    subgraph "🎯 Skills (Plugins especializados)"
         LOADER[SkillLoader<br>Hot-Reload]
-        MAESTRO[QA_Maestro<br>Orquestrador]
-        UNIT[UnitExpert]
-        INTEG[IntegrationExpert]
-        API[APITestExpert]
-        FRONT[FrontendTestExpert]
-        STATIC[StaticAnalyzer]
-        REPORT[ReportGenerator]
-        REFACT[RefactorGuide]
         CICD[CICDHelper]
-        DOC[TestDocWriter]
+        MAESTRO[QA_Maestro]
+        STATIC[StaticAnalyzer]
     end
 
-    subgraph "💾 Persistência"
-        MEM[MemoryManager]
+    subgraph "💾 Persistência e Checkpointing"
+        DB[(SQLite<br>project_subtasks)]
+        MD[Markdown<br>relatorio_testes_qagent.md]
         REPO[MessageRepository]
-        DB[(SQLite)]
     end
 
     INPUT --> CTRL
-    CTRL --> LOADER
-    LOADER --> MAESTRO
-    MAESTRO --> UNIT & INTEG & API & FRONT
+    CTRL --> DB & MD
+    CTRL --> PERS
     CTRL --> LOOP
-    LOOP <--> TOOLS
     LOOP <--> PROV
-    LOOP --> MEM --> REPO --> DB
     LOOP --> OUTPUT
+    MD --> REPO --> DB
 ```
 
 ### Padrões de Design Utilizados

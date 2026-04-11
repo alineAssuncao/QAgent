@@ -55,7 +55,7 @@ Execute nesta ordem:
 5. **Acionamento da Sub-Skill**: Use `activate_skill` para carregar as instruções específicas.
 6. **Criação Técnica**: Siga as instruções da sub-skill para gerar o testware.
 7. **Execução e Cobertura**: Use ferramentas de CLI para rodar os testes.
-8. **Relatório de Entrega**: Acione o `ReportGenerator` para o relatório final.
+8. **Relatório de Entrega**: Acione o `ReportGenerator` para o relatório final ou o **Relatório de Validação** caso o usuário exija auditoria.
 
 ---
 

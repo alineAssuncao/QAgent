@@ -170,23 +170,36 @@ class GitManagementTool(BaseTool):
     async def _ensure_pytest_installed(self, repo_path: str) -> str:
         """Verifica se o pytest está instalado na pasta venv e realiza a instalação se necessário."""
         import sys
-        
+
         if sys.platform == "win32":
-            pytest_path = os.path.join(settings.BASE_DIR, "venv", "Scripts", "pytest.exe")
-            pip_path = os.path.join(settings.BASE_DIR, "venv", "Scripts", "pip.exe")
+            venv_name = ".venv" if os.path.exists(os.path.join(settings.BASE_DIR, ".venv")) else "venv"
+            pytest_path = os.path.join(
+                settings.BASE_DIR, venv_name, "Scripts", "pytest.exe"
+            )
+            pip_path = os.path.join(settings.BASE_DIR, venv_name, "Scripts", "pip.exe")
         else:
-            pytest_path = os.path.join(settings.BASE_DIR, "venv", "bin", "pytest")
-            pip_path = os.path.join(settings.BASE_DIR, "venv", "bin", "pip")
+            venv_name = ".venv" if os.path.exists(os.path.join(settings.BASE_DIR, ".venv")) else "venv"
+            pytest_path = os.path.join(settings.BASE_DIR, venv_name, "bin", "pytest")
+            pip_path = os.path.join(settings.BASE_DIR, venv_name, "bin", "pip")
 
         if not os.path.exists(pytest_path):
-            logging.info("pytest não encontrado no venv. Realizando a instalação do pytest e pytest-cov...")
+            logging.info(
+                "pytest não encontrado no venv. Realizando a instalação do pytest e pytest-cov..."
+            )
             if os.path.exists(pip_path):
-                result = await self._run_command([pip_path, "install", "pytest", "pytest-cov"], cwd=repo_path)
+                result = await self._run_command(
+                    [pip_path, "install", "pytest", "pytest-cov"], cwd=repo_path
+                )
                 if result.returncode != 0:
-                    return f"Erro ao instalar pytest através do venv pip:\n{result.stderr}"
+                    return (
+                        f"Erro ao instalar pytest através do venv pip:\n{result.stderr}"
+                    )
             else:
                 # Fallback, tenta usar python -m pip no contexto atual
-                result = await self._run_command(["python", "-m", "pip", "install", "pytest", "pytest-cov"], cwd=repo_path)
+                result = await self._run_command(
+                    ["python", "-m", "pip", "install", "pytest", "pytest-cov"],
+                    cwd=repo_path,
+                )
                 if result.returncode != 0:
                     return f"Erro ao instalar pytest:\nPython: {result.stderr}"
         return "ok"
@@ -196,10 +209,15 @@ class GitManagementTool(BaseTool):
         logging.info(f"Executando testes em {repo_path}")
 
         import sys
+
         if sys.platform == "win32":
-            pytest_cmd = os.path.join(settings.BASE_DIR, "venv", "Scripts", "pytest.exe")
+            venv_name = ".venv" if os.path.exists(os.path.join(settings.BASE_DIR, ".venv")) else "venv"
+            pytest_cmd = os.path.join(
+                settings.BASE_DIR, venv_name, "Scripts", "pytest.exe"
+            )
         else:
-            pytest_cmd = os.path.join(settings.BASE_DIR, "venv", "bin", "pytest")
+            venv_name = ".venv" if os.path.exists(os.path.join(settings.BASE_DIR, ".venv")) else "venv"
+            pytest_cmd = os.path.join(settings.BASE_DIR, venv_name, "bin", "pytest")
 
         test_commands = [
             ("package.json", ["npm", "test"]),
@@ -208,7 +226,7 @@ class GitManagementTool(BaseTool):
                 [
                     "python",
                     "-m",
-                    "pytest_cmd",
+                    "pytest",
                     "--cov=.",
                     "--cov-report=term",
                     "--maxfail=5",
@@ -219,26 +237,31 @@ class GitManagementTool(BaseTool):
                 [
                     "python",
                     "-m",
-                    "pytest_cmd",
+                    "pytest",
                     "--cov=.",
                     "--cov-report=term",
                     "--maxfail=5",
                 ],
             ),
-            ("setup.py", ["python", "-m", "pytest_cmd", "--cov=.", "--cov-report=term"]),
+            ("setup.py", ["python", "-m", "pytest", "--cov=.", "--cov-report=term"]),
             ("Cargo.toml", ["cargo", "test"]),
             ("pom.xml", ["mvn", "clean", "test", "jacoco:report"]),
         ]
 
         for filename, cmd in test_commands:
             if os.path.exists(os.path.join(repo_path, filename)):
-                if cmd[0] == pytest_cmd:
+                if "pytest" in cmd:
                     install_status = await self._ensure_pytest_installed(repo_path)
                     if install_status != "ok":
                         return install_status
 
                 try:
                     result = await self._run_command(cmd, cwd=repo_path)
+                    logging.info(f"[GIT_MANAGE] Comando executado: {' '.join(cmd)}")
+                    logging.info(f"[GIT_MANAGE] Return code: {result.returncode}")
+                    logging.info(f"[GIT_MANAGE] Stdout (200 chars): {result.stdout[:200]}")
+                    logging.info(f"[GIT_MANAGE] Stderr (200 chars): {result.stderr[:200]}")
+                    
                     status = "✅ Sucesso" if result.returncode == 0 else "❌ Falha"
 
                     if filename == "pom.xml":
@@ -309,7 +332,7 @@ class GitManagementTool(BaseTool):
                 cmd = [
                     "python",
                     "-m",
-                    "pytest_cmd",
+                    "pytest",
                     "--cov=.",
                     "--cov-report=term",
                     "--maxfail=5",
@@ -345,8 +368,8 @@ class GitManagementTool(BaseTool):
         return f"Erro no push: {result.stderr}"
 
     async def _run_command(
-        self, cmd: List[str], cwd: str
-    ) -> asyncio.subprocess.Process:
+        self, cmd: List[str], cwd: str, timeout: int = 120
+    ) -> Any:
         """Executa um comando de forma assíncrona."""
         process = await asyncio.create_subprocess_exec(
             *cmd,
@@ -354,12 +377,18 @@ class GitManagementTool(BaseTool):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-        stdout, stderr = await process.communicate()
+        try:
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
+        except asyncio.TimeoutError:
+            process.kill()
+            stdout, stderr = await process.communicate()
+            stderr = f"TIMEOUT: Comando excedeu o tempo limite de {timeout}s e foi encerrado.\n".encode() + (stderr or b"")
 
         class Result:
             def __init__(self, returncode, stdout, stderr):
-                self.returncode = returncode
-                self.stdout = stdout.decode() if stdout else ""
-                self.stderr = stderr.decode() if stderr else ""
+                # If killed by timeout, process.returncode might be None/Negative depending on OS
+                self.returncode = 124 if returncode is None else returncode
+                self.stdout = stdout.decode('utf-8', errors='replace') if stdout else ""
+                self.stderr = stderr.decode('utf-8', errors='replace') if stderr else ""
 
-        return Result(process.returncode, stdout, stderr)
+        return Result(process.returncode if process.returncode is not None else 124, stdout, stderr)

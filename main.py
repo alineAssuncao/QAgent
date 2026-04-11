@@ -1,6 +1,21 @@
 import asyncio
 import logging
 import sys
+
+# Corrige o erro inútil do Windows Proactor (__del__) aparecendo ao fechar o servidor
+if sys.platform == "win32":
+    try:
+        from asyncio.proactor_events import _ProactorBasePipeTransport
+        _original_del = _ProactorBasePipeTransport.__del__
+        def _silenced_del(self):
+            try:
+                _original_del(self)
+            except Exception:
+                pass
+        _ProactorBasePipeTransport.__del__ = _silenced_del
+    except Exception:
+        pass
+
 from core.bot import dp, bot, setup_middlewares
 from memory.database import Database
 
