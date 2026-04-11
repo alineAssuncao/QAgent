@@ -148,7 +148,9 @@ class OllamaProvider(BaseProvider):
 
 class GeminiProvider(BaseProvider):
     def __init__(self, api_key: str):
-        super().__init__("Google Gemini", "gemini-2.0-flash")
+        super().__init__("Google Gemini", "models/gemini-2.5-flash")
+        if not HAS_GEMINI:
+            raise ImportError("A biblioteca 'google-genai' não está instalada. Execute 'pip install google-genai' para usar este provedor.")
         self.client = genai.Client(api_key=api_key)
         self.api_key = api_key
 

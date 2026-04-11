@@ -488,6 +488,12 @@ _Acompanhe o progresso em tempo real._"""
                     f"[MEDICAO] Falha na instalação, tentando rodar mesmo assim"
                 )
 
+        # Instalação garantida de ferramentas de teste
+        await git_tool._run_command(
+            [sys.executable, "-m", "pip", "install", "pytest", "pytest-cov"],
+            cwd=repo_full_path,
+        )
+
         resultado_testes = await git_tool._run_command(
             [
                 "python",

@@ -188,6 +188,28 @@ VOCÊ NÃO PODE GERAR O BLOCO 'Observation:'. O sistema fornecerá a observaçã
             # Adicionar a resposta do assistente ao contexto do loop
             messages.append({"role": "assistant", "content": response_content})
 
+            # --- AUTO-LOG INFALÍVEL IDE Console & Arquivo ---
+            # Parseia o raw e cria uma visualização linda para o terminal e markdown
+            _t_match = re.search(r"Thought:\s*(.*?)(?=Action:|$)", response_content, re.DOTALL)
+            _t_text = _t_match.group(1).strip() if _t_match else ""
+            
+            _a_match = re.search(r"Action:\s*`?(\w+)`?", response_content)
+            _a_text = _a_match.group(1).strip() if _a_match else ""
+            
+            _ai_match = re.search(r"Action Input:\s*({.*})", response_content, re.DOTALL)
+            _ai_text = _ai_match.group(1).strip() if _ai_match else ""
+
+            # 1. Impressão bonita no Console
+            print(f"\n\033[44;97m 📝 [QA Relator_log] Iteração {current_iteration} \033[0m", flush=True)
+            if _t_match and _a_match:
+                print(f"\n\033[1;36m🧠 Pensamento Estratégico:\033[0m")
+                print(f"\033[93m{_t_text}\033[0m\n")
+                print(f"\033[1;35m⚡ Decisão/Ação:\033[0m \033[97m{_a_text}\033[0m", flush=True)
+                print(f"\033[1;30m📦 Parâmetros:\033[0m \033[90m{_ai_text}\033[0m", flush=True)
+            else:
+                print(f"\n\033[93m{response_content}\033[0m", flush=True)
+            print(f"\033[90m{'-'*60}\033[0m\n", flush=True)
+
             # 4. Verificar se é uma Resposta Final
             if "FINAL_ANSWER:" in response_content:
                 # Verificar se o modelo executou ações antes do FINAL_ANSWER
