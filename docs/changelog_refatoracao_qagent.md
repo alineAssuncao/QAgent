@@ -57,3 +57,15 @@ Implementamos uma camada defensiva de isolamento e compatibilidade local, preven
 * **Circuit-Breaker de Comandos Base (`Timeout`):** A execução de processos de shell e validação do sistema agora engloba uma barreira assíncrona mandatória de exclusão de processos (*timeout de 120s*). Isso impede que testes bloqueantes acidentalmente gerados pela IA (como requisições `HTTPServer` rodando indefinidamente) congelem todo o cérebro do bot.
 * **Patch em Vazamento de I/O do Windows:** Silenciamos avisos excessivos (`ValueError: I/O operation on closed pipe`) atrelados ao fechamento súbito do Event Loop (protocolo Proactor) base no Windows, limpando a saída no terminal.
 * **Prevenção de Spam na Interface Telegram:** Interceptamos preventivamente advertências limiares da API do Telegram (`Message is not modified`), mantendo os cards de progresso ao vivo fixos sem forçar o recarregamento na tela (spam) do usuário em etapas repetitivas de inferência.
+
+---
+
+## 8. 📊 Refino de Métricas, Cobertura e Estabilização das Suítes
+
+Consolidamos a precisão matemática dos relatórios e a estabilidade da execução de testes em ambientes Windows.
+
+* **Precisão Matemática e Labelling:** Unificamos as chaves de métricas (`before_pct`, `after_pct`) em todo o pipeline, resolvendo erros de geração de dashboard (`KeyError`) e eliminando ambiguidades entre razões decimais e porcentagens reais.
+* **Normalização da Performance:** A distribuição de "Agent Performance" no dashboard agora é calculada em escala percentual (0-100%), permitindo uma visualização clara do tempo gasto em geração vs. execução, em vez de exibir segundos brutos.
+* **Fim da Inflação de Testes:** Refatoramos a lógica de contagem de testes (`total_created`). Agora o sistema prioriza a contagem oficial do pytest (`collected X items`), evitando falsos positivos originados de menções a "test_" nos logs de pensamento da IA.
+* **Resiliência na Extração de Cobertura:** Ampliamos os padrões de Regex em `controller.py` para suportar múltiplos formatos de saída do `pytest-cov`, garantindo que a métrica `TOTAL` seja capturada com sucesso mesmo em caso de falhas parciais na suíte.
+* **Estabilização via `sys.executable`:** Padronizamos todas as chamadas de subprocessos do `pytest` para utilizarem o interpretador Python ativo, prevenindo conflitos de ambiente virtual (venv) e garantindo a execução correta de módulos instalados.

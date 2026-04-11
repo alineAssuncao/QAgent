@@ -528,6 +528,7 @@ _Acompanhe o progresso em tempo real._"""
         padroes_cobertura = [
             r"TOTAL\s+\d+\s+\d+\s+(?:\d+\s+\d+\s+)?(\d+)%",
             r"TOTAL\s+.*?\s+(\d+)%",
+            r"TOTAL\s+(\d+)%",
             r"(\d+)%\s*coverage",
             r"coverage.*?(\d+)%",
             r"(\d+)%\s*covered",
@@ -1112,7 +1113,7 @@ O teste foi cancelado por falta de credito."""
         try:
             result = await git_tool._run_command(
                 [
-                    "python",
+                    sys.executable,
                     "-m",
                     "pytest",
                     f"--rootdir={repo_full_path}",
@@ -1356,8 +1357,8 @@ O teste foi cancelado por falta de credito."""
 
         temp_qa_data = {
             "coverage": {
-                "before": coverage_before,
-                "after": coverage_after,
+                "before_pct": coverage_before,
+                "after_pct": coverage_after,
             },
             "tests": {
                 "total_executed": tests_info.get("executed", 0),
@@ -1378,14 +1379,14 @@ O teste foi cancelado por falta de credito."""
                 "branch": contexto.repo_name,
             },
             "coverage": {
-                "before": coverage_before,
-                "after": coverage_after,
+                "before_pct": coverage_before,
+                "after_pct": coverage_after,
                 "delta_absolute": round(coverage_after - coverage_before, 2),
-                "delta_percentual": round(
+                "delta_relative_pct": round(
                     ((coverage_after - coverage_before) / max(coverage_before, 1))
                     * 100,
                     2,
-                ),
+                ) if coverage_before > 0 else 0.0,
             },
             "tests": {
                 "total_created": tests_info.get("total", 0),
@@ -1472,7 +1473,13 @@ O teste foi cancelado por falta de credito."""
         # Limpar cores ANSI
         logs = re.sub(r"\x1b\[[0-9;]*m", "", logs)
 
-        total = len(re.findall(r"test_", logs))
+        # Tenta pegar do "collected X items" do pytest
+        collected_match = re.search(r"collected\s+(\d+)\s+items", logs)
+        total = int(collected_match.group(1)) if collected_match else 0
+        
+        # Se não achou, tenta o fallback manual mas sendo mais rigoroso (apenas inícios de linha ou espaços)
+        if total == 0:
+            total = len(re.findall(r"(?:^|\s)test_[\w\d]+\.py", logs)) or len(re.findall(r"test_", logs)) // 2 # heuristic fallback
 
         # Tenta pegar do sumário do pytest: "1 failed, 2 passed in 0.05s"
         summary_match = re.search(
@@ -1548,8 +1555,8 @@ O teste foi cancelado por falta de credito."""
 
         label = f"Run {uuid.uuid4().hex[:4]}"
         history["labels"].append(label)
-        history["cov_before"].append(qa_data["coverage"]["before"])
-        history["cov_after"].append(qa_data["coverage"]["after"])
+        history["cov_before"].append(qa_data["coverage"]["before_pct"])
+        history["cov_after"].append(qa_data["coverage"]["after_pct"])
         history["tests_exec"].append(qa_data["tests"]["total_executed"])
         history["tests_fail"].append(qa_data["tests"]["failures"])
         history["gen_time"].append(qa_data["performance"]["generation_time_seconds"])
@@ -1786,8 +1793,8 @@ O teste foi cancelado por falta de credito."""
         tests = qa_data.get("tests", {})
         performance = qa_data.get("performance", {})
 
-        cov_after = coverage.get("after", 0)
-        cov_before = coverage.get("before", 0)
+        cov_after = coverage.get("after_pct", 0)
+        cov_before = coverage.get("before_pct", 0)
 
         total_exec = tests.get("total_executed", 0)
         failures = tests.get("failures", 0)
@@ -1796,11 +1803,16 @@ O teste foi cancelado por falta de credito."""
         gen_time = performance.get("generation_time_seconds", 0)
         exec_time = performance.get("execution_time_seconds", 0)
 
+        # Normalização da Performance do Agente para escala 0-100%
+        total_time = gen_time + exec_time + 10 # +10s base overhead
+        p_gen = round((gen_time / total_time) * 100, 1)
+        p_exec = round((exec_time / total_time) * 100, 1)
+        
         return {
             "coverage_impact": {
-                "covered": cov_after,
-                "uncovered": max(0, 100 - cov_after),
-                "before": cov_before,
+                "covered_pct": cov_after,
+                "uncovered_pct": max(0, 100 - cov_after),
+                "before_pct": cov_before,
             },
             "test_execution": {
                 "passed": passed,
@@ -1808,9 +1820,9 @@ O teste foi cancelado por falta de credito."""
                 "skipped": max(0, total_exec - passed - failures),
             },
             "agent_performance": {
-                "generation": gen_time,
-                "execution": exec_time,
-                "other": max(0, 100 - (gen_time + exec_time)),
+                "generation_pct": p_gen,
+                "execution_pct": p_exec,
+                "other_pct": round(max(0, 100 - (p_gen + p_exec)), 1),
             },
         }
 
@@ -1833,10 +1845,10 @@ O teste foi cancelado por falta de credito."""
                 "repo": contexto.repo_name,
             },
             "coverage": {
-                "before": coverage_before,
-                "after": coverage_before,
+                "before_pct": coverage_before,
+                "after_pct": coverage_before,
                 "delta_absolute": 0.0,
-                "delta_percentual": 0.0,
+                "delta_relative_pct": 0.0,
             },
             "tests": {
                 "total_created": 0,
