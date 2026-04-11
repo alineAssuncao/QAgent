@@ -1,6 +1,7 @@
 import logging
 import json
 import re
+import os
 from typing import List, Dict, Any, Optional, Callable, Coroutine, Union
 from core.provider import BaseProvider, RateLimitError
 from memory.repository import MessageRepository
@@ -232,6 +233,23 @@ VOCÊ NÃO PODE GERAR O BLOCO 'Observation:'. O sistema fornecerá a observaçã
 
                 final_answer = response_content.split("FINAL_ANSWER:")[-1].strip()
                 await self._update_status("✅ Resposta final gerada.")
+                
+                # Auto-log Final Answer Console & Arquivo
+                print(f"\n\033[1;92m✅ [FINAL_ANSWER GERADA]\033[0m", flush=True)
+                print(f"\033[92m{final_answer}\033[0m\n", flush=True)
+                
+                try:
+                    p_match = re.search(r"Repositorio:\s*([^\n]+)", system_prompt) or re.search(r"Repositório:\s*([^\n]+)", system_prompt)
+                    p_path = p_match.group(1).strip() if p_match else "."
+                    if not p_path.startswith("projects/") and not os.path.isabs(p_path) and os.path.exists(os.path.join("projects", p_path)):
+                        p_path = os.path.join("projects", p_path)
+                    os.makedirs(p_path, exist_ok=True)
+                    log_path = os.path.join(p_path, "log.md")
+                    with open(log_path, "a", encoding="utf-8") as f:
+                        f.write(f"## ✅ Resposta Final\n**Resposta:**\n{final_answer}\n\n---\n")
+                except Exception as e:
+                    pass
+                
                 break
 
             tool_name: str = "unknown"
@@ -262,8 +280,6 @@ VOCÊ NÃO PODE GERAR O BLOCO 'Observation:'. O sistema fornecerá a observaçã
                     )
 
                     await self._update_status(f"🛠️ Executando: {tool_name}")
-                    logging.info(f"THOUGHT: {thought}")
-                    logging.info(f"ACTION: {tool_name}({tool_args})")
 
                     observation = await self.tool_manager.call_tool(
                         tool_name, tool_args

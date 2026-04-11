@@ -18,6 +18,7 @@ from memory.database import Database
 from handlers.input import TelegramInputHandler
 from handlers.output import TelegramOutputHandler
 from core.tools.repository import ReadFileTool, WriteFileTool
+from core.tools.shell import RunShellTool
 from aiogram import types
 import sys
 import traceback
@@ -114,6 +115,7 @@ class QATestContext:
         self.recomendacoes: str = ""
         self.progresso_task: Optional[asyncio.Task] = None
         self.start_time: Optional[datetime] = None
+        self.llm_model: str = "Aguardando..."
         self.erro_encontrado: bool = False
 
 
@@ -123,6 +125,22 @@ class AgentController:
         self.active_provider: Optional[BaseProvider] = None
         self.running_tasks: Dict[int, asyncio.Task] = {}
         self.contextos: Dict[int, QATestContext] = {}
+        logging.info(f"DEBUG: _get_skills_prompt exists? {hasattr(self, '_get_skills_prompt')}")
+
+    def _get_skills_prompt(self) -> str:
+        """Formata as skills carregadas para inclusão no system prompt."""
+        if not self.skill_loader.skills:
+            return ""
+        
+        prompt = "\n\n━━━━━━━━━━━━━━━━━━━━\nSKILLS ADICIONAIS DISPONÍVEIS:\n"
+        for skill in self.skill_loader.skills:
+            name = skill.get("name", "Unknown")
+            desc = skill.get("description", "")
+            instr = skill.get("full_instruction", "")
+            prompt += f"\n--- SKILL: {name} ---\nDescrição: {desc}\n{instr}\n"
+        
+        prompt += "\n━━━━━━━━━━━━━━━━━━━━\n"
+        return prompt
 
     async def initialize(self):
         await Database.init_db()
@@ -256,6 +274,7 @@ class AgentController:
                     return test_type
         return "unitario"  # padrão: teste unitário
 
+
     async def _iniciar_fluxo_qa(
         self,
         message: types.Message,
@@ -274,6 +293,14 @@ class AgentController:
         contexto.test_type = test_type
         contexto.start_time = datetime.now()
         self.contextos[user_id] = contexto
+        
+        # Detectar a LLM ativa logo no início para aparecer no card inicial
+        try:
+            from core.provider import ProviderFactory
+            provider = await ProviderFactory.get_active_provider()
+            contexto.llm_model = provider.model_name
+        except Exception:
+            contexto.llm_model = "Não detectada"
 
         try:
             # Iniciando o Card de Status (Checklist Global)
@@ -283,8 +310,12 @@ class AgentController:
 
             if git_url:
                 await self._set_step_status(user_id, "clonagem", "🔄")
+                from core.tools.shell import RunShellTool
                 from core.tools.git import CloneRepositoryTool
 
+                # Inserir o novo tool de shell aqui para testes ou automação futura
+                shell_tool = RunShellTool()
+                
                 clone_tool = CloneRepositoryTool()
                 await clone_tool.execute(url=git_url)
                 await self._set_step_status(user_id, "clonagem", "✅")
@@ -310,6 +341,10 @@ class AgentController:
     async def _renderizar_card_status(self, contexto: QATestContext) -> str:
         """Gera a representação textual do Lifecycle Card."""
         l = contexto.lifecycle
+        
+        from datetime import datetime
+        # Formatação de data/hora sempre atualizada (runtime)
+        data_hora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")        
         return f"""📋 <b>Status de Automação: QAgent</b>
 ━━━━━━━━━━━━━━━━━━━━
 {l["clonagem"]} 📥 <b>Clonagem do Repositório</b>
@@ -318,6 +353,9 @@ class AgentController:
 {l["implementacao"]} 🛠️ <b>Implementação de Testes</b>
 {l["dashboard"]} 🎨 <b>Geração do Dashboard Analítico</b>
 {l["conclusao"]} ✅ <b>Conclusão e Relatório</b>
+━━━━━━━━━━━━━━━━━━━━
+<b>Data hora:</b> {data_hora}
+<b>LLM utilizada:</b> {contexto.llm_model}
 ━━━━━━━━━━━━━━━━━━━━
 _Acompanhe o progresso em tempo real._"""
 
@@ -1199,6 +1237,9 @@ O teste foi cancelado por falta de credito."""
 📁 <b>Arquivos de código criados em:</b>
 <code>{contexto.repo_path}</code>
 
+📝 <b>Log do QA Relator_log gerado em:</b>
+<code>{contexto.repo_path}/log.md</code>
+
 ━━━━━━━━━━━━━━━━━━━━
 
 💡 <i>Os testes foram implementados conforme o plano e o registro salvo no projeto.</i>
@@ -1707,7 +1748,7 @@ O teste foi cancelado por falta de credito."""
 
         if os.path.exists(os.path.join(repo_path, "pyproject.toml")):
             result = await git_tool._run_command(
-                ["python", "-m", "pip", "install", "-e", "."],
+                [sys.executable, "-m", "pip", "install", "-e", "."],
                 cwd=repo_path,
             )
             logging.info(f"[INSTALL] pip install -e . result: {result.returncode}")
@@ -1715,7 +1756,7 @@ O teste foi cancelado por falta de credito."""
 
         if os.path.exists(os.path.join(repo_path, "setup.py")):
             result = await git_tool._run_command(
-                ["python", "-m", "pip", "install", "-e", "."],
+                [sys.executable, "-m", "pip", "install", "-e", "."],
                 cwd=repo_path,
             )
             logging.info(f"[INSTALL] pip install -e . result: {result.returncode}")
@@ -1723,7 +1764,7 @@ O teste foi cancelado por falta de credito."""
 
         if os.path.exists(os.path.join(repo_path, "requirements.txt")):
             result = await git_tool._run_command(
-                ["python", "-m", "pip", "install", "-r", "requirements.txt"],
+                [sys.executable, "-m", "pip", "install", "-r", "requirements.txt"],
                 cwd=repo_path,
             )
             logging.info(

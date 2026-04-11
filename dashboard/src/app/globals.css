@@ -1,0 +1,72 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: #020617;
+  --foreground: #f8fafc;
+  --primary: #2dd4bf; /* Cyber Teal */
+  --primary-glow: rgba(45, 212, 191, 0.3);
+  --secondary: #0f172a;
+  --accent: #38bdf8;
+  --muted: rgba(148, 163, 184, 0.1);
+  --border: rgba(255, 255, 255, 0.08);
+  --glass: rgba(15, 23, 42, 0.7);
+}
+
+@layer base {
+  body {
+    @apply bg-[var(--background)] text-[var(--foreground)] min-h-screen selection:bg-teal-500/30;
+    font-family: 'Inter', system-ui, sans-serif;
+  }
+}
+
+@layer components {
+  .glass-panel {
+    @apply bg-[var(--glass)] backdrop-blur-xl border border-[var(--border)] rounded-2xl shadow-2xl;
+  }
+
+  .glow-text {
+    @apply text-[var(--primary)] text-shadow-glow;
+  }
+
+  .btn-primary {
+    @apply px-6 py-2 bg-teal-500 text-white rounded-lg hover:bg-teal-400 transition-all active:scale-95 shadow-lg shadow-teal-500/20;
+  }
+
+  .nav-item {
+    @apply flex items-center gap-3 px-4 py-3 rounded-xl hover:bg-white/5 transition-all cursor-pointer text-slate-400 hover:text-teal-400;
+  }
+
+  .nav-item-active {
+    @apply text-teal-400 bg-teal-400/10 border-l-2 border-teal-400;
+  }
+}
+
+/* Custom Animations */
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 15px var(--primary-glow); }
+  50% { box-shadow: 0 0 25px var(--primary-glow); }
+}
+
+.animate-glow {
+  animation: pulse-glow 3s infinite ease-in-out;
+}
+
+/* Scrollbar Style */
+::-webkit-scrollbar {
+  width: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--muted);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--primary);
+}

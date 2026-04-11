@@ -4,8 +4,17 @@ import aiohttp
 from aiogram import types
 from core.bot import bot
 from core.config import settings
-from faster_whisper import WhisperModel
-import fitz # PyMuPDF
+try:
+    from faster_whisper import WhisperModel
+    HAS_WHISPER = True
+except ImportError:
+    HAS_WHISPER = False
+
+try:
+    import fitz # PyMuPDF
+    HAS_PYMUPDF = True
+except ImportError:
+    HAS_PYMUPDF = False
 
 class TelegramInputHandler:
     # Modelo do Whisper carregado apenas quando necessário para economizar RAM
@@ -13,6 +22,8 @@ class TelegramInputHandler:
 
     @classmethod
     def get_stt_model(cls):
+        if not HAS_WHISPER:
+            raise ImportError("A biblioteca 'faster-whisper' não está instalada.")
         if cls._stt_model is None:
             logging.info("Carregando modelo Faster-Whisper...")
             cls._stt_model = WhisperModel("base", device="cpu", compute_type="int8")
@@ -55,6 +66,9 @@ class TelegramInputHandler:
         local_path = os.path.join(settings.TMP_DIR, f"doc_{message.from_user.id}.pdf")
         await bot.download_file(file_path, local_path)
         
+        if not HAS_PYMUPDF:
+            return "⚠️ A biblioteca 'PyMuPDF' não está instalada. Não foi possível ler o PDF."
+            
         try:
             doc = fitz.open(local_path)
             text = ""

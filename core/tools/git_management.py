@@ -224,7 +224,7 @@ class GitManagementTool(BaseTool):
             (
                 "pytest.ini",
                 [
-                    "python",
+                    sys.executable,
                     "-m",
                     "pytest",
                     "--cov=.",
@@ -235,7 +235,7 @@ class GitManagementTool(BaseTool):
             (
                 "pyproject.toml",
                 [
-                    "python",
+                    sys.executable,
                     "-m",
                     "pytest",
                     "--cov=.",
@@ -330,7 +330,7 @@ class GitManagementTool(BaseTool):
 
             try:
                 cmd = [
-                    "python",
+                    sys.executable,
                     "-m",
                     "pytest",
                     "--cov=.",

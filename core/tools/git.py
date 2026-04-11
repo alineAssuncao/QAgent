@@ -76,6 +76,6 @@ class CloneRepositoryTool(BaseTool):
         stdout, stderr = await process.communicate()
 
         if process.returncode != 0:
-            raise Exception(stderr.decode() if stderr else "Comando git falhou")
+            raise Exception(stderr.decode("utf-8", errors="replace") if stderr else "Comando git falhou")
 
-        return stdout.decode() if stdout else ""
+        return stdout.decode("utf-8", errors="replace") if stdout else ""
