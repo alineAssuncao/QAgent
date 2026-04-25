@@ -1,0 +1,20 @@
+# Ruff configuration
+target-version = "py311"
+line-length = 120
+
+[lint]
+select = ["E", "F", "W", "I"]
+ignore = []
+
+exclude = [
+    ".git",
+    "__pycache__",
+    "build",
+    "dist",
+    "venv",
+    ".venv",
+    "projects",
+    "tmp",
+    "scratch",
+    "data"
+]
