@@ -356,7 +356,13 @@ Pare de gerar texto imediatamente após 'Action Input:'.
                             messages.append(
                                 {
                                     "role": "user",
-                                    "content": "IMPORTANTE: Use EXATAMENTE este formato:\nThought: [seu raciocínio]\nAction: [nome_da_ferramenta]\nAction Input: {\"param\": \"valor\"}\n\nFerramentas: read_file, write_file, list_directory, git_manage",
+                                    "content": (
+                                        "IMPORTANTE: Use EXATAMENTE este formato:\n"
+                                        "Thought: [seu raciocínio]\n"
+                                        "Action: [nome_da_ferramenta]\n"
+                                        "Action Input: {\"param\": \"valor\"}\n\n"
+                                        "Ferramentas: read_file, write_file, list_directory, git_manage"
+                                    ),
                                 }
                             )
                         else:

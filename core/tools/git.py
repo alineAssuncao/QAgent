@@ -14,7 +14,11 @@ class CloneRepositoryTool(BaseTool):
 
     @property
     def description(self) -> str:
-        return "Clona um repositório Git público para a pasta 'projects/' local. Retorna o CAMINHO RELATIVO (ex: 'projects/repo') que deve ser usado obrigatoriamente em outras ferramentas."
+        return (
+            "Clona um repositório Git público para a pasta 'projects/' local. "
+            "Retorna o CAMINHO RELATIVO (ex: 'projects/repo') que deve ser usado "
+            "obrigatoriamente em outras ferramentas."
+        )
 
     @property
     def parameters(self) -> Dict[str, Any]:
@@ -27,7 +31,10 @@ class CloneRepositoryTool(BaseTool):
                 },
                 "folder_name": {
                     "type": "string",
-                    "description": "Opcional: Nome da pasta de destino dentro de 'projects/'. Se omitido, usa o nome do repo.",
+                    "description": (
+                        "Opcional: Nome da pasta de destino dentro de 'projects/'. "
+                        "Se omitido, usa o nome do repo."
+                    ),
                 },
             },
             "required": ["url"],
@@ -50,7 +57,11 @@ class CloneRepositoryTool(BaseTool):
                 await self._run_git_command(
                     ["git", "-C", target_dir, "reset", "--hard", "HEAD"]
                 )
-                return f"Sucesso: O repositório já existia em '{os.path.relpath(target_dir, settings.BASE_DIR)}', foi atualizado com git fetch + reset --hard HEAD."
+                path_rel = os.path.relpath(target_dir, settings.BASE_DIR)
+                return (
+                    f"Sucesso: O repositório já existia em '{path_rel}', "
+                    "foi atualizado com git fetch + reset --hard HEAD."
+                )
             except Exception as e:
                 return f"Erro ao atualizar repositório existente: {str(e)}"
 
@@ -62,7 +73,10 @@ class CloneRepositoryTool(BaseTool):
                 ["git", "clone", "--depth", "1", url, target_dir]
             )
             relative_path = os.path.relpath(target_dir, settings.BASE_DIR)
-            return f"Sucesso: Repositório clonado em '{relative_path}'. Você agora pode explorar este diretório usando 'list_directory' ou 'read_file'."
+            return (
+                f"Sucesso: Repositório clonado em '{relative_path}'. "
+                "Você agora pode explorar este diretório usando 'list_directory' ou 'read_file'."
+            )
         except Exception as e:
             error_msg = str(e)
             return f"Erro ao clonar repositório: {error_msg}"

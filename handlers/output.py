@@ -16,18 +16,31 @@ except ImportError:
 
 class TelegramOutputHandler:
     @staticmethod
-    async def send_response(chat_id: int, text: str, requires_audio: bool = False, reply_markup: types.InlineKeyboardMarkup = None, parse_mode=None):
+    async def send_response(
+        chat_id: int,
+        text: str,
+        requires_audio: bool = False,
+        reply_markup: types.InlineKeyboardMarkup = None,
+        parse_mode=None
+    ):
         """Define a melhor estratégia de envio (Texto ou Áudio/Voz)."""
 
         if requires_audio:
             await TelegramOutputHandler._send_voice(chat_id, text)
-            if reply_markup: # Enviar botões separadamente se for áudio
+            if reply_markup:  # Enviar botões separadamente se for áudio
                 await bot.send_message(chat_id, "Opções disponíveis:", reply_markup=reply_markup)
         else:
-            await TelegramOutputHandler._send_text_chunks(chat_id, text, reply_markup=reply_markup, parse_mode=parse_mode)
+            await TelegramOutputHandler._send_text_chunks(
+                chat_id, text, reply_markup=reply_markup, parse_mode=parse_mode
+            )
 
     @staticmethod
-    async def _send_text_chunks(chat_id: int, text: str, reply_markup: types.InlineKeyboardMarkup = None, parse_mode=None):
+    async def _send_text_chunks(
+        chat_id: int,
+        text: str,
+        reply_markup: types.InlineKeyboardMarkup = None,
+        parse_mode=None
+    ):
         """Divide o texto em chunks de 4096 caracteres para respeitar o limite do Telegram."""
         limit = 4096
         chunks = [text[i:i+limit] for i in range(0, len(text), limit)]

@@ -13,7 +13,10 @@ class RunShellTool(BaseTool):
 
     @property
     def description(self) -> str:
-        return "Executa comandos no shell do sistema operacional de forma síncrona/assíncrona. Use para rodar testes, linting, instalar dependências ou verificar o ambiente."
+        return (
+            "Executa comandos no shell do sistema operacional de forma síncrona/assíncrona. "
+            "Use para rodar testes, linting, instalar dependências ou verificar o ambiente."
+        )
 
     @property
     def parameters(self) -> Dict[str, Any]:
@@ -26,7 +29,10 @@ class RunShellTool(BaseTool):
                 },
                 "cwd": {
                     "type": "string",
-                    "description": "O diretório de trabalho para execução do comando. Se não fornecido, usa o diretório base do projeto."
+                    "description": (
+                        "O diretório de trabalho para execução do comando. "
+                        "Se não fornecido, usa o diretório base do projeto."
+                    )
                 },
                 "timeout": {
                     "type": "integer",

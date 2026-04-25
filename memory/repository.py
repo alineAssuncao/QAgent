@@ -62,10 +62,12 @@ class MessageRepository:
     @staticmethod
     async def get_pending_subtasks(parent_id: int):
         db = await Database.get_instance()
-        cursor = await db.execute(
-            "SELECT id, module_path, type, status, retry_count FROM project_subtasks WHERE parent_task_id = ? AND status != 'completed' ORDER BY id ASC",
-            (parent_id,),
+        query = (
+            "SELECT id, module_path, type, status, retry_count "
+            "FROM project_subtasks WHERE parent_task_id = ? "
+            "AND status != 'completed' ORDER BY id ASC"
         )
+        cursor = await db.execute(query, (parent_id,))
         rows = await cursor.fetchall()
         return [
             {
@@ -95,10 +97,12 @@ class MessageRepository:
     @staticmethod
     async def get_messages(conversation_id: str, limit: int = 10) -> List[Dict[str, str]]:
         db = await Database.get_instance()
-        cursor = await db.execute(
-            "SELECT role, content FROM (SELECT * FROM messages WHERE conversation_id = ? ORDER BY timestamp DESC LIMIT ?) ORDER BY timestamp ASC",
-            (conversation_id, limit)
+        query = (
+            "SELECT role, content FROM (SELECT * FROM messages "
+            "WHERE conversation_id = ? ORDER BY timestamp DESC LIMIT ?) "
+            "ORDER BY timestamp ASC"
         )
+        cursor = await db.execute(query, (conversation_id, limit))
         rows = await cursor.fetchall()
         return [{"role": row[0], "content": row[1]} for row in rows]
 
@@ -178,9 +182,10 @@ class MessageRepository:
     async def get_pending_tasks(user_id: int) -> List[Dict[str, Any]]:
         """Retorna todas as tarefas pendentes na fila para o usuário."""
         db = await Database.get_instance()
-        cursor = await db.execute(
-            "SELECT id, input_text, created_at FROM tasks WHERE user_id = ? AND status = 'pending' ORDER BY created_at ASC",
-            (user_id,)
+        query = (
+            "SELECT id, input_text, created_at FROM tasks "
+            "WHERE user_id = ? AND status = 'pending' ORDER BY created_at ASC"
         )
+        cursor = await db.execute(query, (user_id,))
         rows = await cursor.fetchall()
         return [{"id": row[0], "input_text": row[1], "created_at": row[2]} for row in rows]
