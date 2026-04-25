@@ -1015,39 +1015,39 @@ O teste foi cancelado por falta de credito."""
 
                 res = await self._executar_agente_especialista(
                     contexto, task_id, 'codificacao', prompt,
-                    f"Crie os testes unitários para o arquivo {task['module_path']}. Use read_file para ler o código-fonte primeiro, depois write_file para salvar os testes."
+                    f"Crie os testes unitários para o arquivo {task['module_path']}. "
+                    "Use read_file para ler o código-fonte primeiro, depois write_file para salvar os testes."
                 )
-                
+
                 await MessageRepository.update_subtask_status(task['id'], 'completed', res[:500])
-                
             except Exception as e:
                 logging.error(f"Erro na sub-tarefa {task['id']}: {e}")
                 await MessageRepository.update_subtask_status(task['id'], 'failed', str(e))
-                
+
             await self._sync_project_report(contexto, task_id)
-        
+
         # 4. Fase TESTER: Verificação determinística (sem LLM)
         await self._set_step_status(user_id, "implementacao", "🧪 Tester | Rodando pytest... | 📂 Local")
-        
+
         import subprocess
         project_abs = os.path.abspath(contexto.repo_path)
         try:
             result = subprocess.run(
-                ["python", "-m", "pytest", 
+                ["python", "-m", "pytest",
                  f"--rootdir={project_abs}",
                  "--override-ini=asyncio_mode=auto",
-                 "--cov=.", "--cov-report=term", 
+                 "--cov=.", "--cov-report=term",
                  "--maxfail=5", "-v"],
                 cwd=project_abs,
                 capture_output=True, text=True, timeout=120
             )
             test_output = result.stdout + result.stderr
             passed = result.returncode == 0
-            
+
             log_msg = "✅ Testes passaram" if passed else f"❌ Testes falharam (exit code: {result.returncode})"
             logging.info(f"[TESTER] {log_msg}\n{test_output[:500]}")
             await self._set_step_status(user_id, "implementacao", f"🧪 Tester | {log_msg}")
-            
+
         except subprocess.TimeoutExpired:
             logging.error("[TESTER] Timeout ao executar pytest (120s)")
             await self._set_step_status(user_id, "implementacao", "🧪 Tester | ⏰ Timeout")
@@ -1111,7 +1111,8 @@ O teste foi cancelado por falta de credito."""
                 ],
                 cwd=repo_full_path,
             )
-            resultado_testes = f"{'✅ Sucesso' if result.returncode == 0 else '❌ Falha'}:\n{result.stdout}\n{result.stderr}"
+            status_test = '✅ Sucesso' if result.returncode == 0 else '❌ Falha'
+            resultado_testes = f"{status_test}:\n{result.stdout}\n{result.stderr}"
         except Exception as e:
             logging.warning(f"[RELATORIO] Erro ao executar testes: {e}")
             resultado_testes = f"Erro: {str(e)}"
@@ -1134,8 +1135,8 @@ O teste foi cancelado por falta de credito."""
         db = await Database.get_instance()
         cursor = await db.execute(
             """
-            SELECT module_path, status 
-            FROM project_subtasks 
+            SELECT module_path, status
+            FROM project_subtasks
             WHERE parent_task_id = (SELECT id FROM tasks WHERE user_id = ? ORDER BY id DESC LIMIT 1)
             ORDER BY id ASC
             """,
