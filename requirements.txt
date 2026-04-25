@@ -12,3 +12,4 @@ pydantic-settings==2.1.0
 pytest>=8.0.0
 pytest-cov>=4.1.0
 google-api-core
+pytest-asyncio>=0.23.0
