@@ -7,7 +7,7 @@ repo_abs = os.path.abspath(repo_path)
 
 all_py = glob.glob(os.path.join(repo_abs, "**", "*.py"), recursive=True)
 
-exclude = ["test", "__init__", "setup", "conftest", "manage", 
+exclude = ["test", "__init__", "setup", "conftest", "manage",
     "migration", "wsgi", "asgi", "__pycache__", ".git",
     "docs", "examples", "venv", "node_modules"]
 
@@ -18,7 +18,7 @@ for f in all_py:
         continue
     rel = os.path.relpath(f, base_dir).replace("\\", "/")
     valid.append(rel)
-    
+
 print(f"Arquivos encontrados: {len(valid)}")
 for v in valid:
     print(f"  - {v}")

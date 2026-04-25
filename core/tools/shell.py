@@ -1,8 +1,10 @@
 import asyncio
-import os
 import logging
-from typing import Dict, Any
+import os
+from typing import Any, Dict
+
 from core.tools.base import BaseTool
+
 
 class RunShellTool(BaseTool):
     @property
@@ -42,14 +44,14 @@ class RunShellTool(BaseTool):
 
         # Higienização básica de segurança (opcional, dependendo do uso)
         # Como o bot é para uso privado em ambiente controlado, permitimos execução direta.
-        
+
         try:
             # Se cwd não for absoluto, resolver a partir do diretório do projeto ou settings
             from core.config import settings
             base_dir = settings.BASE_DIR
-            
+
             working_dir = cwd if cwd and os.path.isabs(cwd) else os.path.join(base_dir, cwd) if cwd else base_dir
-            
+
             if not os.path.exists(working_dir):
                 return f"Erro: Diretório de trabalho '{working_dir}' não existe."
 
@@ -62,23 +64,23 @@ class RunShellTool(BaseTool):
 
             try:
                 stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
-                
+
                 stdout_str = stdout.decode("utf-8", errors="replace").strip()
                 stderr_str = stderr.decode("utf-8", errors="replace").strip()
-                
+
                 result = []
                 if stdout_str:
                     result.append(f"STDOUT:\n{stdout_str}")
                 if stderr_str:
                     result.append(f"STDERR:\n{stderr_str}")
-                
+
                 final_output = "\n".join(result) if result else "Comando executado com sucesso (sem saída)."
                 return f"Exit Code: {process.returncode}\n{final_output}"
-                
+
             except asyncio.TimeoutError:
                 process.kill()
                 return f"Erro: O comando excedeu o timeout de {timeout}s."
-                
+
         except Exception as e:
             logging.error(f"Erro ao executar shell command: {e}")
             return f"Erro na execução: {str(e)}"

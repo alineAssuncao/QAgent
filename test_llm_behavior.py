@@ -1,6 +1,7 @@
+import asyncio
 import os
 import sys
-import asyncio
+
 from dotenv import load_dotenv
 
 # Configuração de path antes dos imports do projeto
@@ -9,22 +10,23 @@ load_dotenv()
 
 from core.controller import AgentController  # noqa: E402
 from core.loop import AgentLoop  # noqa: E402
-from core.tools.repository import ListDirectoryTool, ReadFileTool, WriteFileTool  # noqa: E402
 from core.tools.git_management import GitManagementTool  # noqa: E402
-from core.tools.skills import SkillActivationTool  # noqa: E402
 from core.tools.log_tool import UpdateLogTool  # noqa: E402
 from core.tools.manager import ToolManager  # noqa: E402
+from core.tools.repository import ListDirectoryTool, ReadFileTool, WriteFileTool  # noqa: E402
+from core.tools.skills import SkillActivationTool  # noqa: E402
+
 
 async def simulate():
     print("Iniciando simulacao de controller (Apenas o começo para ver o primeiro Thought)...")
     controller = AgentController()
     await controller.initialize()
-    
+
     provider = controller.provider_service.get_primary_provider()
-    
-    
+
+
     # Preparar ferramentas
-    
+
     tools = [
         ListDirectoryTool(),
         ReadFileTool(),
@@ -55,19 +57,19 @@ Tarefa: Criar um plano de testes unitários e implementá-los usando as Ferramen
 """
     print("--------------------------------------------------")
     print("Enviando requisição (limitada a 1 loop) para a LLM...")
-    
+
     # We pass a print-based status callback to see what happens
     async def status_cb(msg):
         print(f"[STATUS] {msg}")
-        
+
     loop = AgentLoop("test-123", provider, tool_manager, status_cb, [provider])
-    loop.max_iterations = 2 
-    
+    loop.max_iterations = 2
+
     try:
         await loop.run("iniciar testes no projeto flask", system_prompt)
     except Exception as e:
         print(f"Loop finalizado com erro/exception: {e}")
-        
+
     print("\n--- Verifica se log.md foi criado ---")
     if os.path.exists("projects/flask/log.md"):
         print("SIM! O log foi criado.")

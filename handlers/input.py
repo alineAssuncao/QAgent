@@ -1,8 +1,11 @@
 import logging
 import os
+
 from aiogram import types
+
 from core.bot import bot
 from core.config import settings
+
 try:
     from faster_whisper import WhisperModel
     HAS_WHISPER = True
@@ -10,7 +13,7 @@ except ImportError:
     HAS_WHISPER = False
 
 try:
-    import fitz # PyMuPDF
+    import fitz  # PyMuPDF
     HAS_PYMUPDF = True
 except ImportError:
     HAS_PYMUPDF = False
@@ -34,14 +37,14 @@ class TelegramInputHandler:
         file_id = message.voice.file_id
         file = await bot.get_file(file_id)
         file_path = file.file_path
-        
+
         # Garantir diretório tmp
         if not os.path.exists(settings.TMP_DIR):
             os.makedirs(settings.TMP_DIR)
-        
+
         local_path = os.path.join(settings.TMP_DIR, f"voice_{message.from_user.id}.ogg")
         await bot.download_file(file_path, local_path)
-        
+
         try:
             model = TelegramInputHandler.get_stt_model()
             segments, info = model.transcribe(local_path, beam_size=5)
@@ -61,13 +64,13 @@ class TelegramInputHandler:
         file_id = message.document.file_id
         file = await bot.get_file(file_id)
         file_path = file.file_path
-        
+
         local_path = os.path.join(settings.TMP_DIR, f"doc_{message.from_user.id}.pdf")
         await bot.download_file(file_path, local_path)
-        
+
         if not HAS_PYMUPDF:
             return "⚠️ A biblioteca 'PyMuPDF' não está instalada. Não foi possível ler o PDF."
-            
+
         try:
             doc = fitz.open(local_path)
             text = ""
@@ -89,16 +92,16 @@ class TelegramInputHandler:
         file_id = message.document.file_id
         file = await bot.get_file(file_id)
         file_path = file.file_path
-        
+
         timestamp = datetime.now().strftime("%Y%m%d%H%M%S")
         project_folder = f"script_{message.from_user.id}_{timestamp}"
         project_path = os.path.join(settings.PROJECTS_DIR, project_folder)
-        
+
         if not os.path.exists(project_path):
             os.makedirs(project_path, exist_ok=True)
-            
+
         local_file_path = os.path.join(project_path, message.document.file_name)
         await bot.download_file(file_path, local_file_path)
-        
+
         return f"Teste Unitário em projects/{project_folder}"
 

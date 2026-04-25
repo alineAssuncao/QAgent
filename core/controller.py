@@ -132,14 +132,14 @@ class AgentController:
         """Formata as skills carregadas para inclusão no system prompt."""
         if not self.skill_loader.skills:
             return ""
-        
+
         prompt = "\n\n━━━━━━━━━━━━━━━━━━━━\nSKILLS ADICIONAIS DISPONÍVEIS:\n"
         for skill in self.skill_loader.skills:
             name = skill.get("name", "Unknown")
             desc = skill.get("description", "")
             instr = skill.get("full_instruction", "")
             prompt += f"\n--- SKILL: {name} ---\nDescrição: {desc}\n{instr}\n"
-        
+
         prompt += "\n━━━━━━━━━━━━━━━━━━━━\n"
         return prompt
 
@@ -294,7 +294,7 @@ class AgentController:
         contexto.test_type = test_type
         contexto.start_time = datetime.now()
         self.contextos[user_id] = contexto
-        
+
         # Detectar a LLM ativa logo no início para aparecer no card inicial
         try:
             from core.provider import ProviderFactory
@@ -314,7 +314,7 @@ class AgentController:
                 from core.tools.git import CloneRepositoryTool
 
                 # Inserir o novo tool de shell aqui para testes ou automação futura
-                
+
                 clone_tool = CloneRepositoryTool()
                 await clone_tool.execute(url=git_url)
                 await self._set_step_status(user_id, "clonagem", "✅")
@@ -340,10 +340,10 @@ class AgentController:
     async def _renderizar_card_status(self, contexto: QATestContext) -> str:
         """Gera a representação textual do Lifecycle Card."""
         lifecycle = contexto.lifecycle
-        
+
         from datetime import datetime
         # Formatação de data/hora sempre atualizada (runtime)
-        data_hora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")        
+        data_hora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
         return f"""📋 <b>Status de Automação: QAgent</b>
 ━━━━━━━━━━━━━━━━━━━━
 {lifecycle["clonagem"]} 📥 <b>Clonagem do Repositório</b>
@@ -409,8 +409,8 @@ _Acompanhe o progresso em tempo real._"""
     async def _analisar_repositorio(
         self, contexto: QATestContext, user_id: int, message: types.Message
     ):
-        from core.tools.repository import ListDirectoryTool
         from core.tools.git_management import GitManagementTool
+        from core.tools.repository import ListDirectoryTool
 
 
         list_tool = ListDirectoryTool()
@@ -651,7 +651,7 @@ _Acompanhe o progresso em tempo real._"""
             total_exec = tests_data.get("total_executed", 0)
             failed = tests_data.get("failures", 0)
             passed = tests_data.get("passed", 0)
-            
+
             if total_exec > 0:
                 return (
                     f"⚠️ <b>Testes falharam antes da coleta final de cobertura.</b>\n\n"
@@ -661,7 +661,7 @@ _Acompanhe o progresso em tempo real._"""
                     f"• Falharam: {failed}\n\n"
                     f"<i>Consulte qa_coverage_dashboard.html para mais detalhes.</i>"
                 )
-            
+
             return "⚠️ <b>Dados de coverage não encontrados no log estruturado.</b>"
 
         linhas = []
@@ -849,14 +849,14 @@ O teste foi cancelado por falta de credito."""
             (task_id,)
         )
         all_subtasks = await cursor.fetchall()
-        
+
         report_path = os.path.join(settings.BASE_DIR, contexto.repo_path, "test_plan_qagent.md")
-        
+
         content = "# 📋 Plano de Testes e Execuções - QAgent\n\n"
         content += f"**Projeto:** {contexto.repo_name}\n"
         content += f"**Data:** {datetime.now().strftime('%d/%m/%Y %H:%M')}\n\n"
         content += "## 🛠️ Checklist de Tarefas\n\n"
-        
+
         for i, (module, ttype, status, log) in enumerate(all_subtasks, 1):
             if status == "completed":
                 check = "[V]"
@@ -864,13 +864,13 @@ O teste foi cancelado por falta de credito."""
                 check = "[X]"
             else:
                 check = "[ ]"
-                
+
             content += f"{i}. {check} **{ttype.capitalize()}**: `{module}`\n"
             if log and status == "failed":
                 content += f"    > ⚠️ Erro: {log[:150]}...\n"
-        
+
         content += "\n\n---\n*Atualizado automaticamente pelo QAgent - Inteligência em QA*"
-        
+
         try:
             with open(report_path, "w", encoding="utf-8") as f:
                 f.write(content)
@@ -882,21 +882,21 @@ O teste foi cancelado por falta de credito."""
         available_providers = await ProviderFactory.get_best_provider_for_task(ptype)
         if not available_providers:
             available_providers = await ProviderFactory.get_all_available_providers()
-            
+
         active_provider = available_providers[0]
-        
-        from core.tools.repository import ListDirectoryTool, ReadFileTool
+
         from core.tools.git_management import GitManagementTool
-        from core.tools.skills import SkillActivationTool
         from core.tools.manager import ToolManager
-        
+        from core.tools.repository import ListDirectoryTool, ReadFileTool
+        from core.tools.skills import SkillActivationTool
+
         tools = [
             ListDirectoryTool(), ReadFileTool(), WriteFileTool(),
             GitManagementTool(), SkillActivationTool(self.skill_loader)
         ]
-        
+
         conversation_id = await MessageRepository.get_or_create_conversation(contexto.user_id)
-        
+
         # Mapeamento de Personas e ícones para o status
         persona_icons = {
             "analise": "🔍 Analista",
@@ -910,17 +910,17 @@ O teste foi cancelado por falta de credito."""
             provider=active_provider,
             tool_manager=ToolManager(tools),
             status_callback=lambda text: self._set_step_status(
-                contexto.user_id, 
-                "implementacao", 
+                contexto.user_id,
+                "implementacao",
                 f"{persona_label} | {text} | ☁️ {loop.current_provider_name}"
             ),
             available_providers=available_providers
         )
-        
+
         # Limitar iterações: Coder precisa de no máximo 10 (ler + escrever + corrigir)
         if ptype == "codificacao":
             loop.max_iterations = 10
-        
+
         return await loop.run(user_input, system_prompt)
 
     async def _descobrir_arquivos_para_teste(self, contexto: QATestContext) -> list:
@@ -931,25 +931,25 @@ O teste foi cancelado por falta de credito."""
         import glob
         repo_abs = os.path.abspath(contexto.repo_path)
         base_abs = os.path.abspath(str(settings.BASE_DIR))
-        
+
         # Buscar todos os .py no repositório
         all_py = glob.glob(os.path.join(repo_abs, "**", "*.py"), recursive=True)
-        
+
         # Filtrar: excluir testes, __init__, setup, configs, migrations
         exclude_patterns = [
-            "test", "__init__", "setup", "conftest", "manage", 
+            "test", "__init__", "setup", "conftest", "manage",
             "migration", "wsgi", "asgi", "__pycache__", ".git",
             "docs", "examples", "venv", "node_modules"
         ]
-        
+
         valid_files = []
         for f in all_py:
             full_lower = f.lower().replace("\\", "/")
-            
+
             # Pular arquivos que correspondem aos padrões de exclusão
             if any(pat in full_lower for pat in exclude_patterns):
                 continue
-            
+
             # Converter para caminho relativo ao BASE_DIR
             try:
                 rel_path = os.path.relpath(f, base_abs).replace("\\", "/")
@@ -1476,10 +1476,14 @@ O teste foi cancelado por falta de credito."""
         # Limpar cores ANSI
         logs = re.sub(r"\x1b\[[0-9;]*m", "", logs)
 
-        # Se não achou, tenta o fallback manual mas sendo mais rigoroso (apenas inícios de linha ou espaços)
+        # Tenta pegar do "collected X items" do pytest
+        collected_match = re.search(r"collected\s+(\d+)\s+items", logs)
+        total = int(collected_match.group(1)) if collected_match else 0
+
+        # Se não achou, tenta o fallback manual mas sendo mais rigoroso
         if total == 0:
             total = len(re.findall(r"(?:^|\s)test_[\w\d]+\.py", logs)) or \
-                    len(re.findall(r"test_", logs)) // 2 # heuristic fallback
+                    len(re.findall(r"test_", logs)) // 2  # heuristic fallback
 
         # Tenta pegar do sumário do pytest: "1 failed, 2 passed in 0.05s"
         failed = 0

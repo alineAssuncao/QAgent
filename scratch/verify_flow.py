@@ -1,20 +1,22 @@
 import asyncio
 import os
-from core.tools.repository import WriteFileTool, ReadFileTool
+
 from core.config import settings
+from core.tools.repository import ReadFileTool, WriteFileTool
+
 
 async def verify_flow():
     print("--- Verificando Fluxo de Escrita/Leitura ---")
     repo_name = "python-simple-rest-api"
     test_path = f"projects/{repo_name}/tests/diagnostic_test.py"
     content = "def test_diag():\n    assert True\n"
-    
+
     # 1. Testar Escrita
     write_tool = WriteFileTool()
     print(f"Tentando escrever em: {test_path}")
     result = await write_tool.execute(path=test_path, content=content)
     print(f"Resultado escrita: {result}")
-    
+
     # 2. Verificar existência física
     abs_path = os.path.join(settings.BASE_DIR, test_path)
     if os.path.exists(abs_path):

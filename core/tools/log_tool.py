@@ -1,12 +1,14 @@
-import os
 import logging
+import os
 from datetime import datetime
-from typing import Dict, Any
+from typing import Any, Dict
+
 from core.tools.base import BaseTool
+
 
 class UpdateLogTool(BaseTool):
     """Ferramenta para atualizar o log de execução (log.md) na raiz do projeto."""
-    
+
     @property
     def name(self) -> str:
         return "update_log"
@@ -54,7 +56,7 @@ class UpdateLogTool(BaseTool):
 
             log_path = os.path.join(project_path, "log.md")
             timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-            
+
             # Cabeçalho se o arquivo for novo
             header = ""
             if not os.path.exists(log_path):
@@ -64,19 +66,19 @@ class UpdateLogTool(BaseTool):
                     f"**LLM:** {llm_info}\n\n"
                     "---"
                 )
-            
+
             entry = (
                 f"\n\n## [{phase}] - {timestamp}\n"
                 f"{content}\n"
                 "\n---"
             )
-            
+
             mode = "a" if os.path.exists(log_path) else "w"
             with open(log_path, mode, encoding="utf-8") as f:
                 if header:
                     f.write(header)
                 f.write(entry)
-                
+
             return f"Sucesso: Evento registrado em {log_path}"
         except Exception as e:
             logging.error(f"Erro ao atualizar log: {e}")

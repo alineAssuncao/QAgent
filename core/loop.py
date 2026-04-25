@@ -127,8 +127,8 @@ Pare de gerar texto imediatamente após 'Action Input:'.
                             break
 
                     if next_provider:
-                        msg_fallback = f"🔄 Limite atingido no {self.provider.name}. Alternando para {next_provider.name}..."
-                        await self._update_status(msg_fallback)
+                        msg = f"🔄 Limite atingido no {self.provider.name}. Alternando para {next_provider.name}..."
+                        await self._update_status(msg)
                         self.provider = next_provider
                     else:
                         error_msg = "❌ Limite de cota atingido em todos os provedores disponíveis."
@@ -163,8 +163,11 @@ Pare de gerar texto imediatamente após 'Action Input:'.
                                 break
 
                         if next_provider:
-                            msg_fallback = f"⚠️ Erro no {self.provider.name}: {str(e)[:50]}... Alternando para {next_provider.name}..."
-                            await self._update_status(msg_fallback)
+                            msg = (
+                                f"⚠️ Erro no {self.provider.name}: {str(e)[:50]}... "
+                                f"Alternando para {next_provider.name}..."
+                            )
+                            await self._update_status(msg)
                             self.provider = next_provider
                         else:
                             error_msg = f"❌ Erro em todos os provedores disponíveis: {str(e)[:100]}"
@@ -184,7 +187,8 @@ Pare de gerar texto imediatamente após 'Action Input:'.
 
             # 3.5 Prevenção de Alucinação: Truncar se o modelo tentar gerar sua própria Observation
             if "Observation:" in response_content:
-                logging.warning("[AGENT_LOOP] Alucinação detectada: o modelo tentou gerar sua própria Observation. Truncando resposta.")
+                msg = "[AGENT_LOOP] Alucinação detectada: o modelo tentou gerar sua própria Observation. Truncando."
+                logging.warning(msg)
                 response_content = response_content.split("Observation:")[0].strip()
 
             # Adicionar a resposta do assistente ao contexto do loop
@@ -194,10 +198,10 @@ Pare de gerar texto imediatamente após 'Action Input:'.
             # Parseia o raw e cria uma visualização linda para o terminal e markdown
             _t_match = re.search(r"Thought:\s*(.*?)(?=Action:|$)", response_content, re.DOTALL)
             _t_text = _t_match.group(1).strip() if _t_match else ""
-            
+
             _a_match = re.search(r"Action:\s*`?(\w+)`?", response_content)
             _a_text = _a_match.group(1).strip() if _a_match else ""
-            
+
             _ai_match = re.search(r"Action Input:\s*({.*})", response_content, re.DOTALL)
             _ai_text = _ai_match.group(1).strip() if _ai_match else ""
 
@@ -234,37 +238,44 @@ Pare de gerar texto imediatamente após 'Action Input:'.
 
                 # No Agente Analista, não exigimos escrita de código REAL (.py)
                 is_analyst = "AGENTE ANALISTA" in system_prompt_base
-                
+
                 # Analista: aceitar FINAL_ANSWER imediatamente (ele só lista arquivos)
                 if is_analyst:
                     final_answer = response_content.split("FINAL_ANSWER:")[-1].strip()
                     await self._update_status("✅ Análise concluída.")
                     break
-                
+
                 # Coder/Tester: exigir que tenha executado ações E escrito código .py
                 if not has_code_write and "test" in user_input.lower():
                     await self._update_status(
                         "⚠️ Implantação de código não detectada. Solicitando continuação..."
                     )
-                    messages.append(
-                        {
-                            "role": "user",
-                            "content": "ATIVIDADE CRÍTICA: OBRIGATÓRIO usar a ferramenta 'write_file' para criar o arquivo de testes .py FISICAMENTE antes de dar FINAL_ANSWER. NÃO apenas descreva o código, ESCREVA-O com write_file.",
-                        }
+                    msg_content = (
+                        "ATIVIDADE CRÍTICA: OBRIGATÓRIO usar a ferramenta 'write_file' para criar o arquivo "
+                        "de testes .py FISICAMENTE antes de dar FINAL_ANSWER. NÃO apenas descreva o código, "
+                        "ESCREVA-O com write_file."
                     )
+                    messages.append({"role": "user", "content": msg_content})
                     continue
 
                 final_answer = response_content.split("FINAL_ANSWER:")[-1].strip()
                 await self._update_status("✅ Resposta final gerada.")
-                
+
                 # Auto-log Final Answer Console & Arquivo
                 print("\n\033[1;92m✅ [FINAL_ANSWER GERADA]\033[0m", flush=True)
                 print(f"\033[92m{final_answer}\033[0m\n", flush=True)
-                
+
                 try:
-                    p_match = re.search(r"Repositorio:\s*([^\n]+)", system_prompt) or re.search(r"Repositório:\s*([^\n]+)", system_prompt)
+                    p_regex = r"Repositorio:\s*([^\n]+)"
+                    p_match = re.search(p_regex, system_prompt) or re.search(r"Repositório:\s*([^\n]+)", system_prompt)
                     p_path = p_match.group(1).strip() if p_match else "."
-                    if not p_path.startswith("projects/") and not os.path.isabs(p_path) and os.path.exists(os.path.join("projects", p_path)):
+
+                    is_local = (
+                        not p_path.startswith("projects/") and
+                        not os.path.isabs(p_path) and
+                        os.path.exists(os.path.join("projects", p_path))
+                    )
+                    if is_local:
                         p_path = os.path.join("projects", p_path)
                     os.makedirs(p_path, exist_ok=True)
                     log_path = os.path.join(p_path, "log.md")
@@ -272,7 +283,7 @@ Pare de gerar texto imediatamente após 'Action Input:'.
                         f.write(f"## ✅ Resposta Final\n**Resposta:**\n{final_answer}\n\n---\n")
                 except Exception:
                     pass
-                
+
                 break
 
             tool_name: str = "unknown"
@@ -308,7 +319,7 @@ Pare de gerar texto imediatamente após 'Action Input:'.
                     obs_message = f"Observation: {observation}"
                     messages.append({"role": "user", "content": obs_message})
                     logging.info(f"OBSERVATION: {str(observation)[:200]}...")
-                
+
                 # FALLBACK: Tentar parsear JSON puro (modelo retornou {"action": "tool", ...})
                 elif self.tool_manager:
                     json_parsed = False
@@ -317,14 +328,14 @@ Pare de gerar texto imediatamente após 'Action Input:'.
                     if clean.startswith("```"):
                         clean = re.sub(r"^```\w*\n?", "", clean)
                         clean = re.sub(r"\n?```$", "", clean).strip()
-                    
+
                     try:
                         data = json.loads(clean)
                         if isinstance(data, dict) and "action" in data:
                             tool_name = data.pop("action")
                             # Remover campos duplicados/inválidos
                             tool_args = {k: v for k, v in data.items() if k != "action"}
-                            
+
                             await self._update_status(f"🛠️ Executando: {tool_name}")
                             logging.info(f"[JSON-FALLBACK] ACTION: {tool_name}({tool_args})")
 
@@ -338,7 +349,7 @@ Pare de gerar texto imediatamente após 'Action Input:'.
                             json_parsed = True
                     except (json.JSONDecodeError, TypeError):
                         pass
-                    
+
                     if not json_parsed:
                         if current_iteration < self.max_iterations:
                             await self._update_status("🔄 Refinando raciocínio...")

@@ -1,7 +1,10 @@
-import aiosqlite
-import os
 import logging
+import os
+
+import aiosqlite
+
 from core.config import settings
+
 
 class Database:
     _instance = None
@@ -24,7 +27,7 @@ class Database:
     @classmethod
     async def init_db(cls):
         db = await cls.get_instance()
-        
+
         # Tabela de Conversas
         await db.execute("""
             CREATE TABLE IF NOT EXISTS conversations (
@@ -34,7 +37,7 @@ class Database:
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        
+
         # Tabela de Mensagens
         await db.execute("""
             CREATE TABLE IF NOT EXISTS messages (
@@ -74,7 +77,7 @@ class Database:
                 FOREIGN KEY (parent_task_id) REFERENCES tasks (id)
             )
         """)
-        
+
         await db.commit()
         logging.info("Banco de Dados inicializado e tabelas verificadas.")
 

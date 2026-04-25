@@ -1,10 +1,13 @@
+import asyncio
 import logging
 import os
-import asyncio
+
 from aiogram import types
 from aiogram.utils.chat_action import ChatActionSender
+
 from core.bot import bot
 from core.config import settings
+
 try:
     import edge_tts
     HAS_EDGE_TTS = True
@@ -15,7 +18,7 @@ class TelegramOutputHandler:
     @staticmethod
     async def send_response(chat_id: int, text: str, requires_audio: bool = False, reply_markup: types.InlineKeyboardMarkup = None, parse_mode=None):
         """Define a melhor estratégia de envio (Texto ou Áudio/Voz)."""
-        
+
         if requires_audio:
             await TelegramOutputHandler._send_voice(chat_id, text)
             if reply_markup: # Enviar botões separadamente se for áudio
@@ -28,12 +31,12 @@ class TelegramOutputHandler:
         """Divide o texto em chunks de 4096 caracteres para respeitar o limite do Telegram."""
         limit = 4096
         chunks = [text[i:i+limit] for i in range(0, len(text), limit)]
-        
+
         for i, chunk in enumerate(chunks):
             # O reply_markup só é enviado no último chunk
             markup = reply_markup if i == len(chunks) - 1 else None
             await bot.send_message(chat_id, chunk, reply_markup=markup, parse_mode=parse_mode)
-            
+
             if len(chunks) > 1:
                 await asyncio.sleep(0.5)
 
@@ -41,7 +44,7 @@ class TelegramOutputHandler:
     async def _send_voice(chat_id: int, text: str):
         """Gera áudio via Edge-TTS e envia como mensagem de voz."""
         tmp_path = os.path.join(settings.TMP_DIR, f"voice_{chat_id}.ogg")
-        
+
         # Garantir diretório tmp
         if not os.path.exists(settings.TMP_DIR):
             os.makedirs(settings.TMP_DIR)
@@ -50,13 +53,13 @@ class TelegramOutputHandler:
             async with ChatActionSender.record_voice(chat_id=chat_id, bot=bot):
                 if not HAS_EDGE_TTS:
                     raise ImportError("A biblioteca 'edge-tts' não está instalada.")
-                    
+
                 # Limpar markdown básico do texto para a voz não ler símbolos
                 clean_text = text.replace("#", "").replace("*", "").replace("`", "")
-                
+
                 communicate = edge_tts.Communicate(clean_text, "pt-BR-ThalitaNeural")
                 await communicate.save(tmp_path)
-                
+
                 # Enviar áudio
                 voice = types.FSInputFile(tmp_path)
                 await bot.send_voice(chat_id, voice)

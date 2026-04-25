@@ -1,7 +1,9 @@
 import logging
 import uuid
-from typing import List, Dict, Optional, Any
+from typing import Any, Dict, List, Optional
+
 from memory.database import Database
+
 
 class MessageRepository:
     @staticmethod
@@ -12,10 +14,10 @@ class MessageRepository:
             (user_id,)
         )
         row = await cursor.fetchone()
-        
+
         if row:
             return row[0]
-        
+
         # Criar nova conversa se não existir
         new_id = str(uuid.uuid4())
         await db.execute(
@@ -47,7 +49,7 @@ class MessageRepository:
         await db.commit()
 
     # --- Sub-tasks Management ---
-    
+
     @staticmethod
     async def create_subtask(parent_id: int, module_path: str, task_type: str):
         db = await Database.get_instance()

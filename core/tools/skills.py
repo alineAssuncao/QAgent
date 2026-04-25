@@ -1,6 +1,8 @@
-from typing import Dict, Any
+from typing import Any, Dict
+
 from core.tools.base import BaseTool
 from skills.loader import SkillLoader
+
 
 class SkillActivationTool(BaseTool):
     def __init__(self, skill_loader: SkillLoader):
@@ -33,6 +35,6 @@ class SkillActivationTool(BaseTool):
         skill = self._loader.get_skill_by_name(skill_name)
         if not skill:
             return f"Erro: Skill '{skill_name}' não encontrada ou não carregada."
-        
+
         full_instruction = skill.get('full_instruction', 'Instruções não disponíveis.')
         return f"Instruções Ativadas para '{skill_name}':\n\n{full_instruction}"

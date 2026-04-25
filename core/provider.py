@@ -1,9 +1,12 @@
 import asyncio
-import httpx
 from abc import ABC, abstractmethod
-from typing import List, Dict, Optional
+from typing import Dict, List, Optional
+
+import httpx
+
 from core.config import settings
 from core.middleware import provider_health
+
 try:
     from google import genai
     from google.api_core import exceptions as google_exceptions
@@ -130,11 +133,11 @@ class GeminiProvider(BaseProvider):
         # Separar instrução de sistema e formatar mensagens
         system_instruction = None
         genai_contents = []
-        
+
         for msg in messages:
             role = msg["role"]
             content = msg["content"]
-            
+
             if role == "system":
                 # O novo SDK prefere system_instruction separado
                 system_instruction = content
@@ -154,7 +157,7 @@ class GeminiProvider(BaseProvider):
             }
             if system_instruction:
                 kwargs["config"]["system_instruction"] = system_instruction
-            
+
             # Se houver apenas uma mensagem de conteúdo, simplificar
             if len(genai_contents) == 1 and genai_contents[0]["role"] == "user":
                 kwargs["contents"] = genai_contents[0]["parts"][0]["text"]
@@ -318,11 +321,11 @@ class ProviderFactory:
             # Prioriza o Provedor Padrão (OpenAI se configurado) ou Gemini
             pref = preferred_name or settings.DEFAULT_PROVIDER
             primary = [p for p in all_providers if pref.lower() in p.name.lower()]
-            
+
             # Se não encontrou o primário, tenta Gemini como segunda opção de inteligência
             if not primary and "gemini" not in pref.lower():
                 primary = [p for p in all_providers if "gemini" in p.name.lower()]
-                
+
             others = [p for p in all_providers if p not in primary]
             return primary + others
         elif task_type in ["teste", "verificacao"]:

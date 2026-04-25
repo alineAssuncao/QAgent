@@ -1,9 +1,10 @@
-import pytest
+import json
 import os
 import sys
-import json
-from unittest.mock import patch
 from datetime import datetime
+from unittest.mock import patch
+
+import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
@@ -145,6 +146,7 @@ tests/test_server.py ..F..F..                                          [100%]
     @pytest.mark.asyncio
     async def test_gerar_dashboard_full(self, controller, mock_contexto):
         import tempfile
+
         from core.config import settings
 
         with tempfile.TemporaryDirectory() as tmpdir:

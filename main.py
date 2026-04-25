@@ -16,8 +16,9 @@ if sys.platform == "win32":
     except Exception:
         pass
 
-from core.bot import dp, bot, setup_middlewares
+from core.bot import bot, dp, setup_middlewares
 from memory.database import Database
+
 
 async def on_startup():
     """Lógica de inicialização do sistema."""
@@ -33,7 +34,7 @@ async def on_shutdown():
 async def main():
     # Registrar Handlers e Middlewares
     setup_middlewares(dp)
-    
+
     # Hooks de ciclo de vida
     dp.startup.register(on_startup)
     dp.shutdown.register(on_shutdown)

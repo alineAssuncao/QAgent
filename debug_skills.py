@@ -1,6 +1,8 @@
 import os
-import yaml
 import re
+
+import yaml
+
 
 def _parse_skill_file(file_path):
     try:

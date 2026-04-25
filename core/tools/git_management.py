@@ -1,9 +1,10 @@
-import os
 import asyncio
 import logging
-from typing import Dict, Any, List, Optional
-from core.tools.base import BaseTool
+import os
+from typing import Any, Dict, List, Optional
+
 from core.config import settings
+from core.tools.base import BaseTool
 
 
 class GitManagementTool(BaseTool):
@@ -257,7 +258,7 @@ class GitManagementTool(BaseTool):
                     logging.info(f"[GIT_MANAGE] Return code: {result.returncode}")
                     logging.info(f"[GIT_MANAGE] Stdout (200 chars): {result.stdout[:200]}")
                     logging.info(f"[GIT_MANAGE] Stderr (200 chars): {result.stderr[:200]}")
-                    
+
                     status = "✅ Sucesso" if result.returncode == 0 else "❌ Falha"
 
                     if filename == "pom.xml":

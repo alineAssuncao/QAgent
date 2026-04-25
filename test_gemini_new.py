@@ -1,7 +1,8 @@
-from google import genai
 import asyncio
 import os
+
 from dotenv import load_dotenv
+from google import genai
 
 load_dotenv()
 
@@ -10,7 +11,7 @@ async def test_gemini():
     if not api_key:
         print("GEMINI_API_KEY not found")
         return
-    
+
     client = genai.Client(api_key=api_key)
     try:
         # Test synchronous call first if it's simpler, or check for .aio

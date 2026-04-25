@@ -1,5 +1,7 @@
 import asyncio
-from core.provider import ProviderFactory, GeminiProvider, OpenAICompatibleProvider
+
+from core.provider import GeminiProvider, OpenAICompatibleProvider, ProviderFactory
+
 
 async def test_providers():
     print("--- Verificando Instanciação de Provedores ---")

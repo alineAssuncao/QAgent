@@ -1,7 +1,9 @@
 import logging
-from aiogram import Bot, Dispatcher, types, F, Router
-from aiogram.fsm.storage.memory import MemoryStorage
+
+from aiogram import Bot, Dispatcher, F, Router, types
 from aiogram.filters import Command
+from aiogram.fsm.storage.memory import MemoryStorage
+
 from core.config import settings
 
 # Configuração de Logs
@@ -27,7 +29,7 @@ async def handle_all_messages(message: types.Message):
         from core.controller import AgentController
         controller = AgentController()
         await controller.initialize()
-    
+
     await controller.handle_message(message)
 
 @router.callback_query()
@@ -38,7 +40,7 @@ async def process_callback(callback_query: types.CallbackQuery):
         from core.controller import AgentController
         controller = AgentController()
         await controller.initialize()
-    
+
     await controller.handle_callback(callback_query)
 
 def setup_middlewares(dp: Dispatcher):

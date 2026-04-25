@@ -1,6 +1,9 @@
+from unittest.mock import AsyncMock, patch
+
 import pytest
-from unittest.mock import patch, AsyncMock
-from main import on_startup, on_shutdown, main
+
+from main import main, on_shutdown, on_startup
+
 
 @pytest.mark.asyncio
 async def test_on_startup():
