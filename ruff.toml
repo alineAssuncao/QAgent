@@ -2,23 +2,7 @@
 target-version = "py311"
 line-length = 300
 
-[lint]
-# F = Pyflakes (Erros de lógica, variáveis não definidas)
-# E = Pycodestyle (Erros de estilo)
-select = ["F", "E"]
-
-# Regras que vamos IGNORAR para facilitar a vida:
-ignore = [
-    "E501", # Linha muito longa (agora aceitamos até 500 chars)
-    "I001", # Ordem de importação (não importa mais a ordem)
-    "W291", # Espaço no fim da linha (não trava mais)
-    "W293", # Espaço em linha em branco (não trava mais)
-    "E402", # Imports fora do topo do arquivo (permite imports dentro de funções)
-]
-
-# FORÇA a exclusão mesmo se os arquivos forem passados via CLI
-force-exclude = true
-
+# Pastas que o Ruff deve ignorar completamente
 exclude = [
     ".git",
     "__pycache__",
@@ -32,6 +16,20 @@ exclude = [
     "data",
     "**/projects/**",
     "**/tmp/**"
+]
+
+[lint]
+# F = Pyflakes (Erros de lógica)
+# E = Pycodestyle (Erros de estilo)
+select = ["F", "E"]
+
+# Regras ignoradas para facilitar o desenvolvimento
+ignore = [
+    "E501", # Linha muito longa
+    "I001", # Ordem de importação
+    "W291", # Espaço no fim da linha
+    "W293", # Espaço em linha em branco
+    "E402", # Imports fora do topo
 ]
 
 [format]
