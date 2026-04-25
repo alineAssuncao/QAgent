@@ -1,0 +1,5 @@
+# CODEOWNERS file for QAgent
+# This file defines who is responsible for reviewing changes.
+# GitHub will automatically request review from these users on PRs.
+
+*       @alineAssuncao

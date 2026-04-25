@@ -4,7 +4,54 @@ Esta sessão detalha a infraestrutura lógica do QAgent, essencial para a compre
 
 ---
 
-## 1. Visão Macro da Arquitetura
+## Visão Unificada: Negócio & Arquitetura
+
+O diagrama abaixo consolida a proposta de valor do QAgent com sua implementação técnica multicamadas.
+
+```mermaid
+graph TB
+    subgraph BUSINESS ["💼 CAMADA DE NEGÓCIO (Valor & ROI)"]
+        direction LR
+        B1["Redução de Custo QA"] --- B2["Privacidade Local"] --- B3["Visibilidade (KPIs)"]
+    end
+
+    subgraph AGENTS ["🧠 CAMADA COGNITIVA (Orquestração Multi-Agente)"]
+        direction TB
+        M["QA Maestro (Orquestrador)"] --> A["Analista (Mapeamento)"]
+        M --> C["Coder (Implementação)"]
+        M --> T["Tester (Validação)"]
+        M --> R["Reporter (Analytics)"]
+    end
+
+    subgraph ENGINE ["⚙️ CAMADA TÉCNICA (Execução & Inteligência)"]
+        direction TB
+        RE["Engine ReAct<br/>(Thought-Action-Obs)"]
+        SK["Skills (Plugins MD)<br/>(Hot-Reload)"]
+        TL["Tools (Python)<br/>(Git, Shell, FS)"]
+        PR["Provedores LLM<br/>(Gemini, DeepSeek, Local)"]
+    end
+
+    subgraph INFRA ["📦 CAMADA DE ENTREGA (Interfaces & Persistência)"]
+        direction TB
+        TG["Telegram Bot (Mobile/UI)"]
+        DB["Dashboard HTML (Viz)"]
+        SQ[("SQLite & Markdown (State)")]
+    end
+
+    %% Fluxos Principais
+    BUSINESS -.-> M
+    M <==> RE
+    RE <==> SK
+    RE <==> TL
+    RE <==> PR
+    R ==> DB
+    M <==> TG
+    TL ==> SQ
+```
+
+---
+
+## 1. Visão Macro da Arquitetura (Técnica)
 
 O QAgent segue uma arquitetura em camadas, separando a **Precepção (Entrada)**, a **Cognição (Orquestração)** e a **Ação (Execução)**.
 

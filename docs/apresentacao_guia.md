@@ -6,13 +6,13 @@ Este guia foi estruturado para uma apresentação de **10 minutos**, focada em u
 
 ### ⏱️ Cronograma Sugerido
 
-| Tempo | Seção | Objetivo Principal |
-| :--- | :--- | :--- |
-| **0:00 - 1:30** | **O Problema** | Contextualizar a dor do QA e a latência entre dev e teste. |
-| **1:30 - 3:00** | **A Solução (QAgent)** | Apresentar o agente como um colega de equipe onipresente. |
-| **3:00 - 6:00** | **Arquitetura Técnica** | Detalhar o Loop ReAct e a Orquestração Multi-Agente. |
-| **6:00 - 8:00** | **Diferenciais** | Mostrar por que o QAgent é superior a scripts simples. |
-| **8:00 - 10:00** | **Futuro e Conclusão** | Próximos passos e fechamento. |
+| Seção | Objetivo Principal |
+| :--- | :--- |
+| **O Problema** | Contextualizar a dor do QA e a latência entre dev e teste. |
+| **A Solução (QAgent)** | Apresentar o agente como um colega de equipe onipresente. |
+| **Arquitetura Técnica** | Detalhar o Loop ReAct e a Orquestração Multi-Agente. |
+| **Diferenciais** | Mostrar por que o QAgent é superior a scripts simples. |
+| **Futuro e Conclusão** | Próximos passos e fechamento. |
 
 ---
 
@@ -56,9 +56,10 @@ Este guia foi estruturado para uma apresentação de **10 minutos**, focada em u
 - **Mobile-First DevEx**: Gestão de tarefas pesadas via interface de chat.
 
 #### 6. Próximos Passos (Visão de Futuro)
-- Integração profunda com GitHub Actions e GitLab CI.
-- Suporte a linguagens compiladas (Java/Go).
+- Integração profunda com GitHub Actions.
+- Suporte a linguagens compiladas (Java/Go) conteiner.
 - Agente especializado em segurança (Scan de vulnerabilidades).
+- Agente especializado em outras camadas de testes (integração, performance, etc).
 
 ---
 

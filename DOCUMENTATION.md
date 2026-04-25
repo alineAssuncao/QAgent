@@ -18,10 +18,56 @@
 8. [Guia de Setup para Novos Membros](#-8-guia-de-setup-para-novos-membros)
 9. [Estrutura de Diretórios](#-9-estrutura-de-diretórios)
 10. [Guia de Contribuição](#-10-guia-de-contribuição)
-11. [Roadmap e Visão de Futuro](#-11-roadmap-e-visão-de-futuro)
-12. [FAQ](#-12-faq)
+11. [Governança e Qualidade (Trava de Repositório)](#-11-governança-e-qualidade-trava-de-repositório)
+12. [Roadmap e Visão de Futuro](#-12-roadmap-e-visão-de-futuro)
+13. [FAQ](#-13-faq)
 
 ---
+
+## 🏗️ Visão Unificada: Negócio & Arquitetura
+
+O diagrama abaixo consolida a proposta de valor do QAgent com sua implementação técnica multicamadas.
+
+```mermaid
+graph TB
+    subgraph BUSINESS ["💼 CAMADA DE NEGÓCIO (Valor & ROI)"]
+        direction LR
+        B1["Redução de Custo QA"] --- B2["Privacidade Local"] --- B3["Visibilidade (KPIs)"]
+    end
+
+    subgraph AGENTS ["🧠 CAMADA COGNITIVA (Orquestração Multi-Agente)"]
+        direction TB
+        M["QA Maestro (Orquestrador)"] --> A["Analista (Mapeamento)"]
+        M --> C["Coder (Implementação)"]
+        M --> T["Tester (Validação)"]
+        M --> R["Reporter (Analytics)"]
+    end
+
+    subgraph ENGINE ["⚙️ CAMADA TÉCNICA (Execução & Inteligência)"]
+        direction TB
+        RE["Engine ReAct<br/>(Thought-Action-Obs)"]
+        SK["Skills (Plugins MD)<br/>(Hot-Reload)"]
+        TL["Tools (Python)<br/>(Git, Shell, FS)"]
+        PR["Provedores LLM<br/>(Gemini, DeepSeek, Local)"]
+    end
+
+    subgraph INFRA ["📦 CAMADA DE ENTREGA (Interfaces & Persistência)"]
+        direction TB
+        TG["Telegram Bot (Mobile/UI)"]
+        DB["Dashboard HTML (Viz)"]
+        SQ[("SQLite & Markdown (State)")]
+    end
+
+    %% Fluxos Principais
+    BUSINESS -.-> M
+    M <==> RE
+    RE <==> SK
+    RE <==> TL
+    RE <==> PR
+    R ==> DB
+    M <==> TG
+    TL ==> SQ
+```
 
 ## 🎯 1. Visão de Negócio
 
@@ -688,7 +734,27 @@ A forma mais simples de contribuir é **criando novas skills**. Não requer alte
 
 ---
 
-## 🔮 11. Roadmap e Visão de Futuro
+## 🛡️ 11. Governança e Qualidade (Trava de Repositório)
+
+Para garantir a estabilidade do QAgent, o repositório utiliza **travas de segurança** e **automação de qualidade** (CI).
+
+### Regras de Ouro
+1.  **Main Protegida**: É proibido fazer `push` direto na branch `main`. Todo código deve entrar via Pull Request.
+2.  **Revisão Obrigatória**: Todo PR exige pelo menos uma aprovação de um dos donos do projeto (definidos em `.github/CODEOWNERS`).
+3.  **CI Obrigatório**: O botão de merge só é liberado se todos os testes e verificações de estilo passarem no GitHub Actions.
+
+### Fluxo de Trabalho (CI/CD)
+O repositório possui um workflow automatizado (`.github/workflows/ci.yml`) que executa:
+- **Linting (Ruff)**: Garante que o código segue os padrões de formatação.
+- **Testes (Pytest)**: Executa a suíte de testes unitários e de integração.
+- **Cobertura**: Gera relatórios de cobertura para garantir que novas funcionalidades foram testadas.
+
+### Como contribuir com segurança
+Ao abrir um PR, utilize o template padrão para descrever suas mudanças. O sistema de CI será ativado automaticamente. Se os testes falharem, corrija-os localmente antes de solicitar a revisão.
+
+---
+
+## 🔮 12. Roadmap e Visão de Futuro
 
 ### Curto Prazo (Q2 2026)
 - [ ] Testes end-to-end do próprio QAgent
@@ -716,7 +782,7 @@ A forma mais simples de contribuir é **criando novas skills**. Não requer alte
 
 ---
 
-## ❓ 12. FAQ
+## ❓ 13. FAQ
 
 ### Perguntas Técnicas
 
