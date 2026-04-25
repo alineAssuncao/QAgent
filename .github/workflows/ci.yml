@@ -32,8 +32,8 @@ jobs:
         
     - name: Lint with ruff
       run: |
-        # stop the build if there are Python syntax errors or undefined names
-        ruff check .
+        # Scan only our source code, avoiding 'projects/' folder entirely
+        ruff check main.py core/ handlers/ memory/ agents/
         
     - name: Test with pytest
       run: |
