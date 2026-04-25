@@ -211,13 +211,9 @@ class GitManagementTool(BaseTool):
         import sys
 
         if sys.platform == "win32":
-            venv_name = ".venv" if os.path.exists(os.path.join(settings.BASE_DIR, ".venv")) else "venv"
-            pytest_cmd = os.path.join(
-                settings.BASE_DIR, venv_name, "Scripts", "pytest.exe"
-            )
+            os.path.exists(os.path.join(settings.BASE_DIR, ".venv"))
         else:
-            venv_name = ".venv" if os.path.exists(os.path.join(settings.BASE_DIR, ".venv")) else "venv"
-            pytest_cmd = os.path.join(settings.BASE_DIR, venv_name, "bin", "pytest")
+            os.path.exists(os.path.join(settings.BASE_DIR, ".venv"))
 
         test_commands = [
             ("package.json", ["npm", "test"]),

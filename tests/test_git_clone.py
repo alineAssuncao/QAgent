@@ -28,7 +28,7 @@ async def test_git_clone():
     os.makedirs(settings.PROJECTS_DIR, exist_ok=True)
     tools = [
         ListDirectoryTool(),
-        Read_FileTool := ReadFileTool(),
+        ReadFileTool(),
         CloneRepositoryTool()
     ]
     tool_manager = ToolManager(tools)

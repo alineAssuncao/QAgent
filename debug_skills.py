@@ -9,7 +9,7 @@ def _parse_skill_file(file_path):
             match = re.search(r'^---\s*\n(.*?)\n---\s*\n', content, re.DOTALL | re.MULTILINE)
             if match:
                 yaml_content = match.group(1)
-                metadata = yaml.safe_load(yaml_content)
+                yaml.safe_load(yaml_content)
                 return "OK"
             else:
                 return "REGEX_FAIL"

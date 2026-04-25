@@ -1,8 +1,7 @@
-import logging
 import asyncio
 import httpx
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any, Optional
+from typing import List, Dict, Optional
 from core.config import settings
 from core.middleware import provider_health
 try:
@@ -114,36 +113,6 @@ class LMStudioProvider(BaseProvider):
         except asyncio.TimeoutError:
             raise TimeoutError(f"LM Studio não respondeu em {LM_STUDIO_TIMEOUT}s")
 
-
-class OllamaProvider(BaseProvider):
-    def __init__(self, base_url: str, model_name: str):
-        super().__init__("Ollama (Local)", model_name)
-        self.client = AsyncOpenAI(
-            base_url=f"{base_url}/v1",
-            api_key="ollama",
-            timeout=LLM_REQUEST_TIMEOUT,
-        )
-        self.base_url = base_url
-
-    async def is_available(self) -> bool:
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(f"{self.base_url}/api/tags", timeout=2.0)
-                return response.status_code == 200
-        except Exception:
-            return False
-
-    async def generate_response(self, messages: List[Dict[str, str]]) -> str:
-        try:
-            response = await asyncio.wait_for(
-                self.client.chat.completions.create(
-                    model=self.model_name, messages=messages
-                ),
-                timeout=LLM_REQUEST_TIMEOUT,
-            )
-            return response.choices[0].message.content
-        except asyncio.TimeoutError:
-            raise TimeoutError(f"Ollama não respondeu em {LLM_REQUEST_TIMEOUT}s")
 
 
 class GeminiProvider(BaseProvider):

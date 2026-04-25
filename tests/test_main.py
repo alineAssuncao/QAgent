@@ -1,7 +1,5 @@
 import pytest
-import asyncio
 from main import on_startup, on_shutdown, main
-from memory.database import Database
 
 @pytest.mark.asyncio
 async def test_on_startup():

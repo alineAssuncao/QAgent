@@ -1,7 +1,6 @@
 import os
 import sys
 import asyncio
-import logging
 
 # Add project root to path
 sys.path.append(os.getcwd())

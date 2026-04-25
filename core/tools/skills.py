@@ -1,8 +1,6 @@
-import logging
 from typing import Dict, Any
 from core.tools.base import BaseTool
 from skills.loader import SkillLoader
-from core.config import settings
 
 class SkillActivationTool(BaseTool):
     def __init__(self, skill_loader: SkillLoader):

@@ -3,10 +3,17 @@ import sys
 import asyncio
 from dotenv import load_dotenv
 
+# Configuração de path antes dos imports do projeto
 sys.path.append(os.getcwd())
 load_dotenv()
 
-from core.controller import AgentController
+from core.controller import AgentController  # noqa: E402
+from core.loop import AgentLoop  # noqa: E402
+from core.tools.repository import ListDirectoryTool, ReadFileTool, WriteFileTool  # noqa: E402
+from core.tools.git_management import GitManagementTool  # noqa: E402
+from core.tools.skills import SkillActivationTool  # noqa: E402
+from core.tools.log_tool import UpdateLogTool  # noqa: E402
+from core.tools.manager import ToolManager  # noqa: E402
 
 async def simulate():
     print("Iniciando simulacao de controller (Apenas o começo para ver o primeiro Thought)...")
@@ -15,14 +22,8 @@ async def simulate():
     
     provider = controller.provider_service.get_primary_provider()
     
-    from core.loop import AgentLoop
     
     # Preparar ferramentas
-    from core.tools.repository import ListDirectoryTool, ReadFileTool, WriteFileTool
-    from core.tools.git_management import GitManagementTool
-    from core.tools.skills import SkillActivationTool
-    from core.tools.log_tool import UpdateLogTool
-    from core.tools.manager import ToolManager
     
     tools = [
         ListDirectoryTool(),

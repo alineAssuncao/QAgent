@@ -1,7 +1,6 @@
 import logging
 import os
 import asyncio
-import shutil
 import re
 import json
 from enum import Enum
@@ -10,15 +9,14 @@ from core.config import settings
 from typing import Optional, Dict, Any
 from core.provider import ProviderFactory, BaseProvider
 from core.loop import AgentLoop
-from core.middleware import rate_limiter, provider_health
+from core.middleware import rate_limiter
 from skills.loader import SkillLoader
-from core.personas import ANALYST_PERSONA, CODER_PERSONA, TESTER_PERSONA
+from core.personas import CODER_PERSONA
 from memory.repository import MessageRepository
 from memory.database import Database
 from handlers.input import TelegramInputHandler
 from handlers.output import TelegramOutputHandler
 from core.tools.repository import ReadFileTool, WriteFileTool
-from core.tools.shell import RunShellTool
 from aiogram import types
 import sys
 import traceback
@@ -310,11 +308,9 @@ class AgentController:
 
             if git_url:
                 await self._set_step_status(user_id, "clonagem", "🔄")
-                from core.tools.shell import RunShellTool
                 from core.tools.git import CloneRepositoryTool
 
                 # Inserir o novo tool de shell aqui para testes ou automação futura
-                shell_tool = RunShellTool()
                 
                 clone_tool = CloneRepositoryTool()
                 await clone_tool.execute(url=git_url)
@@ -340,19 +336,19 @@ class AgentController:
 
     async def _renderizar_card_status(self, contexto: QATestContext) -> str:
         """Gera a representação textual do Lifecycle Card."""
-        l = contexto.lifecycle
+        lifecycle = contexto.lifecycle
         
         from datetime import datetime
         # Formatação de data/hora sempre atualizada (runtime)
         data_hora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")        
         return f"""📋 <b>Status de Automação: QAgent</b>
 ━━━━━━━━━━━━━━━━━━━━
-{l["clonagem"]} 📥 <b>Clonagem do Repositório</b>
-{l["analise"]} 🔍 <b>Análise de Estrutura</b>
-{l["medicao_inicial"]} 📊 <b>Medição de Cobertura Inicial</b>
-{l["implementacao"]} 🛠️ <b>Implementação de Testes</b>
-{l["dashboard"]} 🎨 <b>Geração do Dashboard Analítico</b>
-{l["conclusao"]} ✅ <b>Conclusão e Relatório</b>
+{lifecycle["clonagem"]} 📥 <b>Clonagem do Repositório</b>
+{lifecycle["analise"]} 🔍 <b>Análise de Estrutura</b>
+{lifecycle["medicao_inicial"]} 📊 <b>Medição de Cobertura Inicial</b>
+{lifecycle["implementacao"]} 🛠️ <b>Implementação de Testes</b>
+{lifecycle["dashboard"]} 🎨 <b>Geração do Dashboard Analítico</b>
+{lifecycle["conclusao"]} ✅ <b>Conclusão e Relatório</b>
 ━━━━━━━━━━━━━━━━━━━━
 <b>Data hora:</b> {data_hora}
 <b>LLM utilizada:</b> {contexto.llm_model}
@@ -410,11 +406,9 @@ _Acompanhe o progresso em tempo real._"""
     async def _analisar_repositorio(
         self, contexto: QATestContext, user_id: int, message: types.Message
     ):
-        from core.bot import bot
         from core.tools.repository import ListDirectoryTool
         from core.tools.git_management import GitManagementTool
 
-        from core.tools.skills import SkillActivationTool
 
         list_tool = ListDirectoryTool()
         estrutura = await list_tool.execute(path=contexto.repo_path)
@@ -473,19 +467,19 @@ _Acompanhe o progresso em tempo real._"""
                     with open(init_file, "w") as f:
                         f.write("")
 
-        has_tests = self._check_has_tests(repo_full_path)
+        self._check_has_tests(repo_full_path)
 
         needs_install = self._check_needs_install(repo_full_path)
         if needs_install:
             logging.info(
-                f"[MEDICAO] Projeto precisa de instalação. Instalando dependências..."
+                "[MEDICAO] Projeto precisa de instalação. Instalando dependências..."
             )
             install_result = await self._install_project_dependencies(repo_full_path)
             if install_result:
-                logging.info(f"[MEDICAO] Instalação concluída com sucesso")
+                logging.info("[MEDICAO] Instalação concluída com sucesso")
             else:
                 logging.warning(
-                    f"[MEDICAO] Falha na instalação, tentando rodar mesmo assim"
+                    "[MEDICAO] Falha na instalação, tentando rodar mesmo assim"
                 )
 
         # Instalação garantida de ferramentas de teste
@@ -803,12 +797,6 @@ _Acompanhe o progresso em tempo real._"""
             await self._gerar_relatorio_final(user_id)
             await self._set_step_status(user_id, "conclusao", "✅")
 
-        except asyncio.CancelledError:
-            await TelegramOutputHandler.send_response(
-                contexto.chat_id,
-                "❌ <b>Execução cancelada pelo usuário.</b>",
-                parse_mode="HTML",
-            )
         except Exception as e:
             logging.error(f"Erro na implementação: {e}")
             contexto.erro_encontrado = True
@@ -851,7 +839,7 @@ O teste foi cancelado por falta de credito."""
 
     async def _sync_project_report(self, contexto: QATestContext, task_id: int):
         """Sincroniza o Banco de Dados com o arquivo test_plan_qagent.md no projeto."""
-        subtasks = await MessageRepository.get_pending_subtasks(task_id)
+        await MessageRepository.get_pending_subtasks(task_id)
         db = await Database.get_instance()
         cursor = await db.execute(
             "SELECT module_path, type, status, result_log FROM project_subtasks WHERE parent_task_id = ? ORDER BY id ASC",
@@ -878,7 +866,7 @@ O teste foi cancelado por falta de credito."""
             if log and status == "failed":
                 content += f"    > ⚠️ Erro: {log[:150]}...\n"
         
-        content += f"\n\n---\n*Atualizado automaticamente pelo QAgent - Inteligência em QA*"
+        content += "\n\n---\n*Atualizado automaticamente pelo QAgent - Inteligência em QA*"
         
         try:
             with open(report_path, "w", encoding="utf-8") as f:
@@ -894,7 +882,7 @@ O teste foi cancelado por falta de credito."""
             
         active_provider = available_providers[0]
         
-        from core.tools.repository import ListDirectoryTool, ReadFileTool, WriteFileTool
+        from core.tools.repository import ListDirectoryTool, ReadFileTool
         from core.tools.git_management import GitManagementTool
         from core.tools.skills import SkillActivationTool
         from core.tools.manager import ToolManager
@@ -953,7 +941,6 @@ O teste foi cancelado por falta de credito."""
         
         valid_files = []
         for f in all_py:
-            filename = os.path.basename(f).lower()
             full_lower = f.lower().replace("\\", "/")
             
             # Pular arquivos que correspondem aos padrões de exclusão
@@ -1056,7 +1043,7 @@ O teste foi cancelado por falta de credito."""
             test_output = result.stdout + result.stderr
             passed = result.returncode == 0
             
-            log_msg = f"✅ Testes passaram" if passed else f"❌ Testes falharam (exit code: {result.returncode})"
+            log_msg = "✅ Testes passaram" if passed else f"❌ Testes falharam (exit code: {result.returncode})"
             logging.info(f"[TESTER] {log_msg}\n{test_output[:500]}")
             await self._set_step_status(user_id, "implementacao", f"🧪 Tester | {log_msg}")
             
@@ -1073,7 +1060,6 @@ O teste foi cancelado por falta de credito."""
 
     async def _gerar_relatorio_final(self, user_id: int):
         import logging
-        import subprocess
 
         contexto = self.contextos.get(user_id)
         if not contexto:
@@ -1100,14 +1086,14 @@ O teste foi cancelado por falta de credito."""
         needs_install = self._check_needs_install(repo_full_path)
         if needs_install:
             logging.info(
-                f"[RELATORIO] Projeto precisa de instalação. Instalando dependências..."
+                "[RELATORIO] Projeto precisa de instalação. Instalando dependências..."
             )
             install_result = await self._install_project_dependencies(repo_full_path)
             if install_result:
-                logging.info(f"[RELATORIO] Instalação concluída")
+                logging.info("[RELATORIO] Instalação concluída")
             else:
                 logging.warning(
-                    f"[RELATORIO] Falha na instalação, tentando rodar mesmo assim"
+                    "[RELATORIO] Falha na instalação, tentando rodar mesmo assim"
                 )
 
         try:
@@ -1290,7 +1276,6 @@ O teste foi cancelado por falta de credito."""
             )
 
     async def _gerar_dashboard(self, contexto: QATestContext, tempo_total: int):
-        import uuid
         import logging
         from core.config import settings
 
@@ -1437,28 +1422,26 @@ O teste foi cancelado por falta de credito."""
     ) -> str:
         passed = tests_info.get("passed", 0)
         failed = tests_info.get("failed", 0)
-        total = tests_info.get("total_created", 0) or (passed + failed)
 
         if failed > 0:
             return f"⚠️ ATENÇÃO: {failed} testes falharam. A cobertura consta como {cov_after}% (ou 0%) porque a coleta de métricas foi interrompida pelas falhas. Corrija os testes para ver o relatório completo."
         elif passed > 0:
             return f"✅ Todos os {passed} testes passaram com sucesso! Cobertura melhorou de {cov_before}% para {cov_after}%."
         else:
-            return f"⚠️ Nenhum teste foi executado ou coletado corretamente. Verifique a configuração do projeto."
+            return "⚠️ Nenhum teste foi executado ou coletado corretamente. Verifique a configuração do projeto."
 
     def _generate_insight_en(
         self, tests_info: dict, cov_before: float, cov_after: float
     ) -> str:
         passed = tests_info.get("passed", 0)
         failed = tests_info.get("failed", 0)
-        total = tests_info.get("total_created", 0) or (passed + failed)
 
         if failed > 0:
             return f"⚠️ WARNING: {failed} tests failed. Coverage is shown as {cov_after}% (or 0%) because metrics collection was aborted. Fix the tests to see the full report."
         elif passed > 0:
             return f"✅ All {passed} tests passed successfully! Coverage improved from {cov_before}% to {cov_after}%."
         else:
-            return f"⚠️ No tests were executed or collected properly. Check project configuration."
+            return "⚠️ No tests were executed or collected properly. Check project configuration."
 
     def _parse_test_logs(self, logs: str) -> dict:
         if not logs:
@@ -1538,7 +1521,7 @@ O teste foi cancelado por falta de credito."""
                         "exec_time": [],
                     },
                 )
-        except:
+        except Exception:
             pass
         return {
             "labels": [],
@@ -1639,7 +1622,7 @@ O teste foi cancelado por falta de credito."""
                             coverage_str = parts[3].replace("%", "").replace(",", "")
                             if coverage_str.replace(".", "").replace("-", "").isdigit():
                                 cov_map[module] = float(coverage_str)
-                        except:
+                        except Exception:
                             pass
         return cov_map
 
@@ -1695,7 +1678,7 @@ O teste foi cancelado por falta de credito."""
                                         "delta": delta,
                                     }
                                 )
-                        except:
+                        except Exception:
                             pass
 
         if not breakdown and coverage_after_total > 0:
@@ -1710,31 +1693,6 @@ O teste foi cancelado por falta de credito."""
 
         return sorted(breakdown, key=lambda x: x["delta"], reverse=True)[:10]
 
-    def _check_has_tests(self, repo_path: str) -> bool:
-        """Verifica se o repositório tem arquivos de teste."""
-        import os
-
-        if not os.path.exists(repo_path):
-            return False
-
-        for root, dirs, files in os.walk(repo_path):
-            if ".git" in root or "__pycache__" in root:
-                continue
-
-            for f in files:
-                if f.startswith("test_") and f.endswith(".py"):
-                    return True
-                if f.endswith("_test.py"):
-                    return True
-
-            if "tests" in dirs:
-                tests_dir = os.path.join(root, "tests")
-                if os.path.isdir(tests_dir):
-                    for f in os.listdir(tests_dir):
-                        if f.endswith(".py"):
-                            return True
-
-        return False
 
     def _check_needs_install(self, repo_path: str) -> bool:
         """Verifica se o projeto precisa de instalação (tem setup.py, pyproject.toml, etc)."""

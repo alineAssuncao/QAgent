@@ -1,4 +1,5 @@
-import glob, os
+import glob
+import os
 
 repo_path = "projects/python-simple-rest-api"
 base_dir = os.path.abspath(".")

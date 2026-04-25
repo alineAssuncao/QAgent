@@ -1,7 +1,5 @@
 import asyncio
-import subprocess
 import os
-import platform
 import logging
 from typing import Dict, Any
 from core.tools.base import BaseTool
@@ -55,9 +53,6 @@ class RunShellTool(BaseTool):
             if not os.path.exists(working_dir):
                 return f"Erro: Diretório de trabalho '{working_dir}' não existe."
 
-            # Usar shell=True no Windows, mas tomar cuidado
-            use_shell = platform.system() == "Windows"
-            
             process = await asyncio.create_subprocess_shell(
                 command,
                 stdout=asyncio.subprocess.PIPE,

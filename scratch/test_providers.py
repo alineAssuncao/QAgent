@@ -1,20 +1,19 @@
 import asyncio
 from core.provider import ProviderFactory, GeminiProvider, OpenAICompatibleProvider
-from core.config import settings
 
 async def test_providers():
     print("--- Verificando Instanciação de Provedores ---")
     try:
         # Testar Gemini (mesmo que sem chave válida, a classe deve ser instanciável)
         print("Testando instanciar GeminiProvider...")
-        gemini = GeminiProvider(api_key="test")
+        GeminiProvider(api_key="test")
         print("GeminiProvider instanciado com sucesso.")
     except Exception as e:
         print(f"ERRO ao instanciar GeminiProvider: {e}")
 
     try:
         print("\nTestando instanciar OpenAICompatibleProvider...")
-        openai = OpenAICompatibleProvider(api_key="test")
+        OpenAICompatibleProvider(api_key="test")
         print("OpenAICompatibleProvider instanciado com sucesso.")
     except Exception as e:
         print(f"ERRO ao instanciar OpenAICompatibleProvider: {e}")

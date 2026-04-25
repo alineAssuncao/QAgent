@@ -1,15 +1,13 @@
 import pytest
-import asyncio
 import os
 import sys
 import json
-import re
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import patch
 from datetime import datetime
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.controller import AgentController, QATestContext, TesteEstado
+from core.controller import AgentController, QATestContext
 
 
 class TestDashboardGeneration:

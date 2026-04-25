@@ -2,7 +2,7 @@ import logging
 import json
 import re
 import os
-from typing import List, Dict, Any, Optional, Callable, Coroutine, Union
+from typing import List, Dict, Any, Optional, Callable, Coroutine
 from core.provider import BaseProvider, RateLimitError
 from memory.repository import MessageRepository
 from core.config import settings
@@ -129,7 +129,7 @@ VOCÊ NÃO PODE GERAR O BLOCO 'Observation:'. O sistema fornecerá a observaçã
                         await self._update_status(msg_fallback)
                         self.provider = next_provider
                     else:
-                        error_msg = f"❌ Limite de cota atingido em todos os provedores disponíveis."
+                        error_msg = "❌ Limite de cota atingido em todos os provedores disponíveis."
                         await self._update_status(error_msg)
                         raise e
                 except Exception as e:
@@ -202,7 +202,7 @@ VOCÊ NÃO PODE GERAR O BLOCO 'Observation:'. O sistema fornecerá a observaçã
             # 1. Impressão bonita no Console
             print(f"\n\033[44;97m 📝 [QA Relator_log] Iteração {current_iteration} \033[0m", flush=True)
             if _t_match and _a_match:
-                print(f"\n\033[1;36m🧠 Pensamento Estratégico:\033[0m")
+                print("\n\033[1;36m🧠 Pensamento Estratégico:\033[0m")
                 print(f"\033[93m{_t_text}\033[0m\n")
                 print(f"\033[1;35m⚡ Decisão/Ação:\033[0m \033[97m{_a_text}\033[0m", flush=True)
                 print(f"\033[1;30m📦 Parâmetros:\033[0m \033[90m{_ai_text}\033[0m", flush=True)
@@ -213,9 +213,7 @@ VOCÊ NÃO PODE GERAR O BLOCO 'Observation:'. O sistema fornecerá a observaçã
             # 4. Verificar se é uma Resposta Final
             if "FINAL_ANSWER:" in response_content:
                 # Verificar se o modelo executou ações antes do FINAL_ANSWER
-                has_action_before_final = (
-                    "Action:" in response_content.split("FINAL_ANSWER:")[0]
-                )
+                "Action:" in response_content.split("FINAL_ANSWER:")[0]
 
                 # Verificar se o modelo executou ações de escrita de código (não apenas .md)
                 has_code_write = False
@@ -229,7 +227,8 @@ VOCÊ NÃO PODE GERAR O BLOCO 'Observation:'. O sistema fornecerá a observaçã
                             if not p.endswith(".md") and not p.endswith(".log") and not p.endswith(".txt"):
                                 has_code_write = True
                                 break
-                    if has_code_write: break
+                    if has_code_write:
+                        break
 
                 # No Agente Analista, não exigimos escrita de código REAL (.py)
                 is_analyst = "AGENTE ANALISTA" in system_prompt_base
@@ -257,7 +256,7 @@ VOCÊ NÃO PODE GERAR O BLOCO 'Observation:'. O sistema fornecerá a observaçã
                 await self._update_status("✅ Resposta final gerada.")
                 
                 # Auto-log Final Answer Console & Arquivo
-                print(f"\n\033[1;92m✅ [FINAL_ANSWER GERADA]\033[0m", flush=True)
+                print("\n\033[1;92m✅ [FINAL_ANSWER GERADA]\033[0m", flush=True)
                 print(f"\033[92m{final_answer}\033[0m\n", flush=True)
                 
                 try:
@@ -269,7 +268,7 @@ VOCÊ NÃO PODE GERAR O BLOCO 'Observation:'. O sistema fornecerá a observaçã
                     log_path = os.path.join(p_path, "log.md")
                     with open(log_path, "a", encoding="utf-8") as f:
                         f.write(f"## ✅ Resposta Final\n**Resposta:**\n{final_answer}\n\n---\n")
-                except Exception as e:
+                except Exception:
                     pass
                 
                 break
@@ -295,11 +294,8 @@ VOCÊ NÃO PODE GERAR O BLOCO 'Observation:'. O sistema fornecerá a observaçã
                     thought_match = re.search(
                         r"Thought:\s*(.*?)(?=Action:|$)", response_content, re.DOTALL
                     )
-                    thought = (
+                    if thought_match:
                         thought_match.group(1).strip()
-                        if thought_match
-                        else "Analisando..."
-                    )
 
                     await self._update_status(f"🛠️ Executando: {tool_name}")
 

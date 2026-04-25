@@ -1,5 +1,4 @@
 import pytest
-import pytest_asyncio
 from core.tools.git import CloneRepositoryTool
 from core.tools.manager import ToolManager
 from core.tools.base import BaseTool

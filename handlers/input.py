@@ -1,6 +1,5 @@
 import logging
 import os
-import aiohttp
 from aiogram import types
 from core.bot import bot
 from core.config import settings
