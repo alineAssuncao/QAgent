@@ -16,6 +16,9 @@ ignore = [
     "E402", # Imports fora do topo do arquivo (permite imports dentro de funções)
 ]
 
+# FORÇA a exclusão mesmo se os arquivos forem passados via CLI
+force-exclude = true
+
 exclude = [
     ".git",
     "__pycache__",
@@ -26,5 +29,10 @@ exclude = [
     "projects",
     "tmp",
     "scratch",
-    "data"
+    "data",
+    "**/projects/**",
+    "**/tmp/**"
 ]
+
+[format]
+exclude = ["projects", "data", "tmp"]

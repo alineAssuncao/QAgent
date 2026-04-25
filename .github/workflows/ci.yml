@@ -37,7 +37,7 @@ jobs:
         
     - name: Test with pytest
       run: |
-        pytest --cov=. --cov-report=xml
+        pytest
       env:
         # Adicione variáveis de ambiente necessárias para os testes aqui
         # Se precisar de segredos, use ${{ secrets.NOME_DO_SECRET }}
