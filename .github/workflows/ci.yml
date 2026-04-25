@@ -41,3 +41,5 @@ jobs:
         # Adicione variáveis de ambiente necessárias para os testes aqui
         # Se precisar de segredos, use ${{ secrets.NOME_DO_SECRET }}
         ENVIRONMENT: test
+        TELEGRAM_BOT_TOKEN: "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
+        TELEGRAM_ALLOWED_USER_IDS: "12345678"

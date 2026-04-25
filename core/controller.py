@@ -1465,22 +1465,17 @@ O teste foi cancelado por falta de credito."""
             total = len(re.findall(r"(?:^|\s)test_[\w\d]+\.py", logs)) or len(re.findall(r"test_", logs)) // 2 # heuristic fallback
 
         # Tenta pegar do sumário do pytest: "1 failed, 2 passed in 0.05s"
-        summary_match = re.search(
-            r"((?P<failed>\d+) failed)?.*?,?\s*((?P<passed>\d+) passed)?",
-            logs,
-            re.IGNORECASE,
-        )
-
         failed = 0
         passed = 0
-
+        summary_match = re.search(r"==+.*?in\s+\d+.*", logs, re.IGNORECASE)
         if summary_match:
-            groups = summary_match.groupdict()
-            failed = int(groups.get("failed") or 0)
-            passed = int(groups.get("passed") or 0)
-
-        # Fallback se o sumário não for literal (ex: crash no meio)
-        if failed == 0 and passed == 0:
+            summary_text = summary_match.group(0)
+            f_match = re.search(r"(\d+)\s+failed", summary_text, re.IGNORECASE)
+            p_match = re.search(r"(\d+)\s+passed", summary_text, re.IGNORECASE)
+            failed = int(f_match.group(1)) if f_match else 0
+            passed = int(p_match.group(1)) if p_match else 0
+        else:
+            # Fallback se o sumário não for literal (ex: crash no meio)
             failed = len(re.findall(r"FAILED|ERROR", logs))
             passed = len(re.findall(r"PASSED|\[PASS\]", logs))
 
