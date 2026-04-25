@@ -1,25 +1,28 @@
+import asyncio
+import json
 import logging
 import os
-import asyncio
 import re
-import json
-from enum import Enum
-from datetime import datetime
-from core.config import settings
-from typing import Optional, Dict, Any
-from core.provider import ProviderFactory, BaseProvider
-from core.loop import AgentLoop
-from core.middleware import rate_limiter
-from skills.loader import SkillLoader
-from core.personas import CODER_PERSONA
-from memory.repository import MessageRepository
-from memory.database import Database
-from handlers.input import TelegramInputHandler
-from handlers.output import TelegramOutputHandler
-from core.tools.repository import ReadFileTool, WriteFileTool
-from aiogram import types
 import sys
 import traceback
+from datetime import datetime
+from enum import Enum
+from typing import Any, Dict, Optional
+
+from aiogram import types
+
+from core.config import settings
+from core.loop import AgentLoop
+from core.middleware import rate_limiter
+from core.personas import CODER_PERSONA
+from core.provider import BaseProvider, ProviderFactory
+from core.tools.git_management import GitManagementTool
+from core.tools.repository import ReadFileTool, WriteFileTool
+from handlers.input import TelegramInputHandler
+from handlers.output import TelegramOutputHandler
+from memory.database import Database
+from memory.repository import MessageRepository
+from skills.loader import SkillLoader
 
 
 class TesteEstado(Enum):
@@ -1183,7 +1186,7 @@ O teste foi cancelado por falta de credito."""
         caminho_relatorio_projeto = os.path.join(
             settings.BASE_DIR, contexto.repo_path, "relatorio_testes_qagent.md"
         )
-        
+
         conteudo_relatorio = f"""# Relatório de Testes Automatizados - QAgent
 
 **Projeto:** {contexto.repo_name}
@@ -1278,15 +1281,14 @@ O teste foi cancelado por falta de credito."""
             )
 
     async def _gerar_dashboard(self, contexto: QATestContext, tempo_total: int):
-        import logging
-        from core.config import settings
-
         logging.info(f"[DASHBOARD] Gerando dashboard para {contexto.repo_path}")
         logging.info(f"[DASHBOARD] cobertura_inicial: {contexto.cobertura_inicial}")
         logging.info(f"[DASHBOARD] cobertura_final: {contexto.cobertura_final}")
-        logging.info(
-            f"[DASHBOARD] resultado_testes (primeiros 500 chars): {str(contexto.resultado_testes_depois_bruto)[:500] if contexto.resultado_testes_depois_bruto else 'VAZIO'}"
+        debug_msg = (
+            f"[DASHBOARD] resultado_testes (primeiros 500 chars): "
+            f"{str(contexto.resultado_testes_depois_bruto)[:500] if contexto.resultado_testes_depois_bruto else 'VAZIO'}"
         )
+        logging.info(debug_msg)
 
         template_path = os.path.join(
             settings.BASE_DIR, "assets", "qa_dashboard_template.html"
@@ -1426,9 +1428,17 @@ O teste foi cancelado por falta de credito."""
         failed = tests_info.get("failed", 0)
 
         if failed > 0:
-            return f"⚠️ ATENÇÃO: {failed} testes falharam. A cobertura consta como {cov_after}% (ou 0%) porque a coleta de métricas foi interrompida pelas falhas. Corrija os testes para ver o relatório completo."
+            msg = (
+                f"⚠️ ATENÇÃO: {failed} testes falharam. A cobertura consta como {cov_after}% (ou 0%) "
+                "porque a coleta de métricas foi interrompida pelas falhas. Corrija os testes para ver o relatório completo."
+            )
+            return msg
         elif passed > 0:
-            return f"✅ Todos os {passed} testes passaram com sucesso! Cobertura melhorou de {cov_before}% para {cov_after}%."
+            msg = (
+                f"✅ Todos os {passed} testes passaram com sucesso! "
+                f"Coberura melhorou de {cov_before}% para {cov_after}%."
+            )
+            return msg
         else:
             return "⚠️ Nenhum teste foi executado ou coletado corretamente. Verifique a configuração do projeto."
 
@@ -1439,9 +1449,17 @@ O teste foi cancelado por falta de credito."""
         failed = tests_info.get("failed", 0)
 
         if failed > 0:
-            return f"⚠️ WARNING: {failed} tests failed. Coverage is shown as {cov_after}% (or 0%) because metrics collection was aborted. Fix the tests to see the full report."
+            msg = (
+                f"⚠️ WARNING: {failed} tests failed. Coverage is shown as {cov_after}% (or 0%) "
+                "because metrics collection was aborted. Fix the tests to see the full report."
+            )
+            return msg
         elif passed > 0:
-            return f"✅ All {passed} tests passed successfully! Coverage improved from {cov_before}% to {cov_after}%."
+            msg = (
+                f"✅ All {passed} tests passed successfully! "
+                f"Coverage improved from {cov_before}% to {cov_after}%."
+            )
+            return msg
         else:
             return "⚠️ No tests were executed or collected properly. Check project configuration."
 
@@ -1458,13 +1476,10 @@ O teste foi cancelado por falta de credito."""
         # Limpar cores ANSI
         logs = re.sub(r"\x1b\[[0-9;]*m", "", logs)
 
-        # Tenta pegar do "collected X items" do pytest
-        collected_match = re.search(r"collected\s+(\d+)\s+items", logs)
-        total = int(collected_match.group(1)) if collected_match else 0
-        
         # Se não achou, tenta o fallback manual mas sendo mais rigoroso (apenas inícios de linha ou espaços)
         if total == 0:
-            total = len(re.findall(r"(?:^|\s)test_[\w\d]+\.py", logs)) or len(re.findall(r"test_", logs)) // 2 # heuristic fallback
+            total = len(re.findall(r"(?:^|\s)test_[\w\d]+\.py", logs)) or \
+                    len(re.findall(r"test_", logs)) // 2 # heuristic fallback
 
         # Tenta pegar do sumário do pytest: "1 failed, 2 passed in 0.05s"
         failed = 0
@@ -1709,9 +1724,6 @@ O teste foi cancelado por falta de credito."""
 
     async def _install_project_dependencies(self, repo_path: str) -> bool:
         """Instala as dependências do projeto."""
-        import os
-        from core.tools.git_management import GitManagementTool
-
         git_tool = GitManagementTool()
 
         if os.path.exists(os.path.join(repo_path, "pyproject.toml")):
@@ -1762,7 +1774,7 @@ O teste foi cancelado por falta de credito."""
         total_time = gen_time + exec_time + 10 # +10s base overhead
         p_gen = round((gen_time / total_time) * 100, 1)
         p_exec = round((exec_time / total_time) * 100, 1)
-        
+
         return {
             "coverage_impact": {
                 "covered_pct": cov_after,
@@ -1783,10 +1795,6 @@ O teste foi cancelado por falta de credito."""
 
     async def _inicializar_json_log(self, contexto: QATestContext):
         """Inicializa o arquivo JSON de métricas com a cobertura inicial."""
-        import json
-        import logging
-        from datetime import datetime
-
         json_log_path = os.path.join(
             settings.BASE_DIR, contexto.repo_path, "qagent_metrics_log.json"
         )

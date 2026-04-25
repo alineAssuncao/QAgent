@@ -1,13 +1,14 @@
-import logging
 import json
-import re
+import logging
 import os
-from typing import List, Dict, Any, Optional, Callable, Coroutine
-from core.provider import BaseProvider, RateLimitError
-from memory.repository import MessageRepository
+import re
+from typing import Any, Callable, Coroutine, Dict, List, Optional
+
 from core.config import settings
-from core.tools.manager import ToolManager
 from core.middleware import provider_health
+from core.provider import BaseProvider, RateLimitError
+from core.tools.manager import ToolManager
+from memory.repository import MessageRepository
 
 
 class AgentLoop:
@@ -68,7 +69,8 @@ Ferramentas Disponíveis:
 {tools_str}
 
 Lembre-se: Sempre use 'FINAL_ANSWER:' para concluir sua tarefa.
-VOCÊ NÃO PODE GERAR O BLOCO 'Observation:'. O sistema fornecerá a observação após o seu 'Action Input:'. Pare de gerar texto imediatamente após 'Action Input:'.
+VOCÊ NÃO PODE GERAR O BLOCO 'Observation:'. O sistema fornecerá a observação após o seu 'Action Input:'.
+Pare de gerar texto imediatamente após 'Action Input:'.
 """
         system_prompt = f"{system_prompt_base}\n{react_instructions}"
 
