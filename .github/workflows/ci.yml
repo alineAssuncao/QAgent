@@ -40,8 +40,6 @@ jobs:
         # Usamos timeout para garantir que o job não fique travado infinitamente se um processo pendurar
         timeout 5m pytest --cov-report=xml
       env:
-        # Adicione variáveis de ambiente necessárias para os testes aqui
-        # Se precisar de segredos, use ${{ secrets.NOME_DO_SECRET }}
         ENVIRONMENT: test
-        TELEGRAM_BOT_TOKEN: "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11"
-        TELEGRAM_ALLOWED_USER_IDS: "12345678"
+        TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+        TELEGRAM_ALLOWED_USER_IDS: ${{ secrets.TELEGRAM_ALLOWED_USER_IDS }}
