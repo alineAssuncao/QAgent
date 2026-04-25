@@ -952,19 +952,19 @@ O teste foi cancelado por falta de credito."""
                 rel_path = os.path.relpath(f, base_abs).replace("\\", "/")
             except ValueError:
                 continue
-            
+
             valid_files.append(rel_path)
-        
+
         # Limitar a 10 arquivos para não sobrecarregar o Coder
         valid_files = valid_files[:10]
-        
+
         logging.info(f"[ANALISTA-FS] Encontrados {len(valid_files)} arquivos testáveis: {valid_files}")
         return valid_files
 
     async def _implementar_testes(self, contexto: QATestContext):
         """Novo fluxo de implementação multi-agente orquestrado."""
         user_id = contexto.user_id
-        
+
         # 1. Garantir que temos uma task principal no DB
         conversation_id = await MessageRepository.get_or_create_conversation(user_id)
         db = await Database.get_instance()
@@ -978,17 +978,17 @@ O teste foi cancelado por falta de credito."""
 
         # 2. Fase de Descoberta (DETERMINÍSTICA — sem ReAct loop)
         await self._set_step_status(user_id, "implementacao", "🔍 Analista | Mapeando projeto... | 📂 Filesystem")
-        
+
         paths = await self._descobrir_arquivos_para_teste(contexto)
-        
+
         if not paths:
             logging.warning(f"Analista não encontrou arquivos .py testáveis em {contexto.repo_path}")
             await TelegramOutputHandler.send_response(
-                contexto.chat_id, 
+                contexto.chat_id,
                 "⚠️ Nenhum arquivo .py testável encontrado no projeto. Verifique a estrutura do repositório."
             )
             return
-        
+
         logging.info(f"[ANALISTA] Arquivos encontrados para testes: {paths}")
         await self._set_step_status(user_id, "implementacao", f"🔍 Analista | ✅ {len(paths)} arquivo(s) mapeado(s)")
 
@@ -1002,18 +1002,19 @@ O teste foi cancelado por falta de credito."""
             pending = await MessageRepository.get_pending_subtasks(task_id)
             if not pending:
                 break
-                
+
             task = pending[0]
             await MessageRepository.update_subtask_status(task['id'], 'running')
             await self._sync_project_report(contexto, task_id)
-            
+
             try:
                 # Fase CODER: usar OpenAI via ReAct loop
                 prompt = CODER_PERSONA.format(module_path=task['module_path'], repo_path=contexto.repo_path)
-                await self._set_step_status(user_id, "implementacao", f"🤖 Coder | ✍️ Escrevendo testes para {os.path.basename(task['module_path'])}")
-                
+                status_msg = f"🤖 Coder | ✍️ Escrevendo testes para {os.path.basename(task['module_path'])}"
+                await self._set_step_status(user_id, "implementacao", status_msg)
+
                 res = await self._executar_agente_especialista(
-                    contexto, task_id, 'codificacao', prompt, 
+                    contexto, task_id, 'codificacao', prompt,
                     f"Crie os testes unitários para o arquivo {task['module_path']}. Use read_file para ler o código-fonte primeiro, depois write_file para salvar os testes."
                 )
                 
