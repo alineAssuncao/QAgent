@@ -13,6 +13,9 @@
 - [ ] Testes unitários executados
 - [ ] Testado manualmente no ambiente local
 
+## Evidência do teste
+<!-- Print com a evidência do testes realizados para validar suas alterações. -->
+
 ## Issues Relacionadas
 <!-- Ex: Fixes #123 -->
 
