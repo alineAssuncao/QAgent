@@ -37,7 +37,8 @@ jobs:
         
     - name: Test with pytest
       run: |
-        pytest
+        # Usamos timeout para garantir que o job não fique travado infinitamente se um processo pendurar
+        timeout 5m pytest --cov-report=xml
       env:
         # Adicione variáveis de ambiente necessárias para os testes aqui
         # Se precisar de segredos, use ${{ secrets.NOME_DO_SECRET }}
