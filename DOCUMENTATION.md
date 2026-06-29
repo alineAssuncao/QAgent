@@ -151,7 +151,8 @@ Skills são arquivos Markdown que podem ser criados, editados e compartilhados s
 
 ```mermaid
 graph TB
-    subgraph "📱 Interface (aiogram)"
+    subgraph "📱 Interface (aiogram & FastAPI)"
+        API[API Endpoints<br>/v1/chat • /v1/transcribe]
         INPUT[TelegramInputHandler<br>Texto • Voz • PDF]
         OUTPUT[TelegramOutputHandler<br>Texto • Áudio • Docs]
     end
@@ -183,6 +184,7 @@ graph TB
         DB[(SQLite)]
     end
 
+    API --> PROV
     INPUT --> CTRL
     CTRL --> LOADER
     LOADER --> MAESTRO
@@ -477,6 +479,7 @@ stateDiagram-v2
 | Camada | Tecnologia | Versão | Justificativa |
 |--------|-----------|--------|---------------|
 | **Linguagem** | Python | 3.11+ | Ecossistema maduro para IA e QA |
+| **API Framework** | FastAPI | 0.109+ | Alta performance, docs automáticos, Pydantic |
 | **Bot Framework** | aiogram | 3.4+ | Assíncrono, moderno, tipado |
 | **IA - Primário** | Google Gemini | SDK v1+ | Performance, custo-benefício |
 | **IA - Fallback** | DeepSeek | API | Redundância de provedor |
@@ -580,6 +583,11 @@ QAgent/
 ├── 📄 run.ps1                  ← Script de execução (Windows)
 ├── 📄 README.md                ← Visão geral rápida
 ├── 📄 DOCUMENTATION.md         ← Este documento ★
+│
+├── 📂 api/                     ← Camada de API REST (Trabalho Final)
+│   ├── main.py                 ← Instância FastAPI, Segurança (API Key)
+│   ├── models.py               ← Modelos Pydantic (Validação de Dados)
+│   └── routes.py               ← Endpoints (/v1/chat, /v1/transcribe)
 │
 ├── 📂 core/                    ← Núcleo do sistema
 │   ├── bot.py                  ← Instância do bot aiogram

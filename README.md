@@ -11,8 +11,9 @@ O QAgent foi projetado para ser 100% portátil. Ele utiliza caminhos dinâmicos 
 
 ## 🧠 Funcionalidades Avançadas
 
-O QAgent evoluiu de um simples bot de chat para um **Agente Autônomo** com capacidades de decisão:
+O QAgent evoluiu de um simples bot de chat para um **Agente Autônomo** com capacidades de decisão e uma **API REST integrada**:
 
+-   **API FastAPI (Nova!)**: Dois novos endpoints (`/v1/chat` e `/v1/transcribe`) permitindo interagir com o QAgent via HTTP, ideal para o trabalho final de Construção de APIs. Completa com documentação Swagger (`/docs`), validação via Pydantic e segurança via API Key.
 -   **Engine ReAct (Reasoning and Acting)**: O bot planeja suas ações (Thought), executa ferramentas (Action) e analisa os resultados (Observation) antes de fornecer a resposta final.
 -   **Suporte a Repositórios Externos**: Capacidade de clonar qualquer repositório Git público para a pasta `/projects` e realizar análises profundas do código fonte.
 -   **Gestão de Fila e Concorrência**: Sistema inteligente que permite enfileirar até 3 tarefas simultâneas, com menus interativos para priorização ou cancelamento.
@@ -37,6 +38,7 @@ O QAgent responde a comandos de controle mesmo enquanto está processando uma ta
 ## 🛠️ Principais Tecnologias
 
 - **Linguagem:** Python 3.11+
+- **Framework API:** [FastAPI](https://fastapi.tiangolo.com/) com Uvicorn
 - **Bot Framework:** [aiogram](https://docs.aiogram.dev/)
 - **IA/LLMs:** Gemini, DeepSeek, e modelos locais via LM Studio e Ollama
 - **Processamento de Áudio:** Faster-Whisper (STT) e Edge-TTS (TTS)
@@ -54,10 +56,29 @@ O QAgent responde a comandos de controle mesmo enquanto está processando uma ta
 ## ⚙️ Configuração Rápida
 
 1. Clone o repositório.
-2. Instale as dependências: `pip install -r requirements.txt`. (Requer ambiente com Python >= 3.11).
-3. **Módulos de Teste**: Certifique-se de ter o `pytest` e `pytest-cov` instalados para o funcionamento pleno dos runners Python.
-4. Configure o arquivo `.env` (veja `.env.example`).
-5. Execute o bot: `python main.py`.
+2. **Pré-requisito (Windows):** Para o pacote de processamento de áudio (Whisper) ser instalado com sucesso, você precisa ter o [Microsoft Visual C++ Build Tools](https://visualstudio.microsoft.com/pt-br/visual-cpp-build-tools/) instalado (Selecione a carga de trabalho *"Desenvolvimento para desktop com C++"* no instalador).
+3. Instale as dependências: `pip install -r requirements.txt`. (Requer ambiente com Python >= 3.11).
+4. **Módulos de Teste**: Certifique-se de ter o `pytest` e `pytest-cov` instalados para o funcionamento pleno dos runners Python.
+5. Configure o arquivo `.env` (veja `.env.example`).
+6. **Opção A (API REST)**: Execute `.\run_api.ps1`.
+7. **Opção B (Telegram Bot)**: Execute `python main.py`.
+
+## 🧪 Como Testar a API (Swagger UI)
+
+1. Após iniciar a API com `.\run_api.ps1`, acesse a documentação interativa em: **[http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)**
+2. **Autenticação:** Clique no botão **"Authorize"** no topo da página e insira a chave de teste (`qagent_secret_key`).
+3. **Endpoint `/v1/chat`:** Expanda a rota de chat, clique em **"Try it out"** e envie um JSON no Request Body para interagir com a IA. *Exemplo de Payload:*
+   ```json
+   {
+     "messages": [
+       {
+         "role": "user",
+         "content": "Qual é a capital do Brasil?"
+       }
+     ]
+   }
+   ```
+4. **Endpoint `/v1/transcribe`:** Expanda a rota de transcrição, clique em **"Try it out"**, faça upload de um arquivo de áudio (`.ogg`, `.mp3` ou `.wav`) e aguarde a resposta transcrita pelo Whisper.
 
 ## 📄 Documentação
 
