@@ -1,7 +1,9 @@
 import logging
 import uuid
-from typing import List, Dict, Optional, Any
+from typing import Any, Dict, List, Optional
+
 from memory.database import Database
+
 
 class MessageRepository:
     @staticmethod
@@ -12,10 +14,10 @@ class MessageRepository:
             (user_id,)
         )
         row = await cursor.fetchone()
-        
+
         if row:
             return row[0]
-        
+
         # Criar nova conversa se não existir
         new_id = str(uuid.uuid4())
         await db.execute(
@@ -27,21 +29,80 @@ class MessageRepository:
         return new_id
 
     @staticmethod
+    async def get_conversation_provider(conversation_id: str) -> Optional[str]:
+        """Retorna o provedor configurado para a conversa."""
+        db = await Database.get_instance()
+        cursor = await db.execute(
+            "SELECT provider FROM conversations WHERE id = ?",
+            (conversation_id,)
+        )
+        row = await cursor.fetchone()
+        return row[0] if row else None
+
+    @staticmethod
     async def add_message(conversation_id: str, role: str, content: str):
         db = await Database.get_instance()
         await db.execute(
             "INSERT INTO messages (conversation_id, role, content) VALUES (?, ?, ?)",
-            (conversation_id, role, content)
+            (conversation_id, role, content),
         )
+        await db.commit()
+
+    # --- Sub-tasks Management ---
+
+    @staticmethod
+    async def create_subtask(parent_id: int, module_path: str, task_type: str):
+        db = await Database.get_instance()
+        await db.execute(
+            "INSERT INTO project_subtasks (parent_task_id, module_path, type, status) VALUES (?, ?, ?, 'pending')",
+            (parent_id, module_path, task_type),
+        )
+        await db.commit()
+
+    @staticmethod
+    async def get_pending_subtasks(parent_id: int):
+        db = await Database.get_instance()
+        query = (
+            "SELECT id, module_path, type, status, retry_count "
+            "FROM project_subtasks WHERE parent_task_id = ? "
+            "AND status != 'completed' ORDER BY id ASC"
+        )
+        cursor = await db.execute(query, (parent_id,))
+        rows = await cursor.fetchall()
+        return [
+            {
+                "id": r[0],
+                "module_path": r[1],
+                "type": r[2],
+                "status": r[3],
+                "retry_count": r[4],
+            }
+            for r in rows
+        ]
+
+    @staticmethod
+    async def update_subtask_status(sub_task_id: int, status: str, result_log: str = None):
+        db = await Database.get_instance()
+        await db.execute(
+            "UPDATE project_subtasks SET status = ?, result_log = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?",
+            (status, result_log, sub_task_id),
+        )
+        if status == "failed":
+            await db.execute(
+                "UPDATE project_subtasks SET retry_count = retry_count + 1 WHERE id = ?",
+                (sub_task_id,),
+            )
         await db.commit()
 
     @staticmethod
     async def get_messages(conversation_id: str, limit: int = 10) -> List[Dict[str, str]]:
         db = await Database.get_instance()
-        cursor = await db.execute(
-            "SELECT role, content FROM (SELECT * FROM messages WHERE conversation_id = ? ORDER BY timestamp DESC LIMIT ?) ORDER BY timestamp ASC",
-            (conversation_id, limit)
+        query = (
+            "SELECT role, content FROM (SELECT * FROM messages "
+            "WHERE conversation_id = ? ORDER BY timestamp DESC LIMIT ?) "
+            "ORDER BY timestamp ASC"
         )
+        cursor = await db.execute(query, (conversation_id, limit))
         rows = await cursor.fetchall()
         return [{"role": row[0], "content": row[1]} for row in rows]
 
@@ -121,9 +182,10 @@ class MessageRepository:
     async def get_pending_tasks(user_id: int) -> List[Dict[str, Any]]:
         """Retorna todas as tarefas pendentes na fila para o usuário."""
         db = await Database.get_instance()
-        cursor = await db.execute(
-            "SELECT id, input_text, created_at FROM tasks WHERE user_id = ? AND status = 'pending' ORDER BY created_at ASC",
-            (user_id,)
+        query = (
+            "SELECT id, input_text, created_at FROM tasks "
+            "WHERE user_id = ? AND status = 'pending' ORDER BY created_at ASC"
         )
+        cursor = await db.execute(query, (user_id,))
         rows = await cursor.fetchall()
         return [{"id": row[0], "input_text": row[1], "created_at": row[2]} for row in rows]

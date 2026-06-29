@@ -28,6 +28,11 @@ Esta skill gera **3 tipos** de relatório, cada um para um momento diferente do 
 **Para quem**: POs, Stakeholders, Gerentes.
 **Conteúdo**: Resumo visual em 1 página, KPIs principais, score de qualidade.
 
+### 🛡️ Tipo 4: Relatório de Validação (Validation Report)
+**Quando**: Auditoria técnica, prova de conformidade ou "Done" formal.
+**Para quem**: Engenheiros de Qualidade (QEs), Auditores, Leads.
+**Conteúdo**: Tabela detalhada de cada teste (pass/fail/duration), conformidade contra thresholds, snapshot do ambiente (OS/Runtime), selo de certificação QAgent.
+
 ---
 
 ## 🔄 Fluxo de Trabalho
@@ -237,6 +242,56 @@ Onde:
 
 ---
 
+## 🛡️ Relatório de Validação (Template)
+**Nome Sugerido**: `docs/unit_validation_report.md`
+
+```markdown
+# 🛡️ RELATÓRIO DE VALIDAÇÃO TÉCNICA — [nome do projeto]
+
+## 📋 Resumo de Validação
+**Status Final**: [✅ VALIDADO | ⚠️ VALIDADO COM RESSALVAS | ❌ FALHA NA VALIDAÇÃO]
+**Ambiente**: [OS] | [Runtime Version]
+**Executor**: QAgent v3.1
+
+---
+
+## 🏆 Declaração de Conformidade
+| Critério | Meta | Alcançado | Status |
+|----------|------|-----------|--------|
+| Cobertura Geral | 80% | [ex: 85%] | [✅/❌] |
+| Testes com Sucesso | 100% | [ex: 98%] | [✅/❌] |
+| Mocks em Lógica | 0 | 0 | 🏆 |
+
+---
+
+## 🧪 Evidência Detalhada de Execução
+| Test Case | Módulo/Arquivo | Duração | Status |
+|-----------|----------------|---------|--------|
+| `test_function_x` | `src/service/x.py` | 12ms | ✅ PASSED |
+| ... | ... | ... | ... |
+
+---
+
+## 💻 Snapshot do Ambiente
+- **Runtime**: [Node/Python vX.Y.Z]
+- **Runner**: [Pytest/Jest/JUnit]
+- **Timestamp**: [ISO-DATE]
+
+---
+
+## 🔬 Auditoria de Testabilidade
+- **Acoplamento**: [Baixo/Médio/Alto]
+- **Uso de Mocks**: [Justificado/Excessivo]
+
+---
+
+## 📌 Próximos Passos
+1. [ ] Corrigir falhas detectadas.
+2. [ ] Aumentar cobertura no módulo [Y].
+```
+
+---
+
 ## 💾 Persistência de Histórico
 
 Para permitir gráficos de evolução ao longo do tempo, salvar dados em `data/test_history.json`:
@@ -282,4 +337,5 @@ Cada execução do QAgent deve adicionar uma entrada para permitir visualizaçã
 1. **Relatório de Acompanhamento** (durante execução): Mensagem Telegram direta
 2. **Relatório Final** (após conclusão): Mensagem Telegram + arquivo `.md` completo
 3. **Relatório Executivo** (sob demanda): Mensagem Telegram resumida
-4. **Dados Históricos**: Salvo em `data/test_history.json` para análise de tendências
+4. **Relatório de Validação** (formal): Arquivo `.md` detalhado (ex: `docs/unit_validation_report.md`)
+5. **Dados Históricos**: Salvo em `data/test_history.json` para análise de tendências

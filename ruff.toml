@@ -1,0 +1,36 @@
+# Ruff configuration - Relaxed for College Project
+target-version = "py311"
+line-length = 300
+
+# Pastas que o Ruff deve ignorar completamente
+exclude = [
+    ".git",
+    "__pycache__",
+    "build",
+    "dist",
+    "venv",
+    ".venv",
+    "projects",
+    "tmp",
+    "scratch",
+    "data",
+    "**/projects/**",
+    "**/tmp/**"
+]
+
+[lint]
+# F = Pyflakes (Erros de lógica)
+# E = Pycodestyle (Erros de estilo)
+select = ["F", "E"]
+
+# Regras ignoradas para facilitar o desenvolvimento
+ignore = [
+    "E501", # Linha muito longa
+    "I001", # Ordem de importação
+    "W291", # Espaço no fim da linha
+    "W293", # Espaço em linha em branco
+    "E402", # Imports fora do topo
+]
+
+[format]
+exclude = ["projects", "data", "tmp"]

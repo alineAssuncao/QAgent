@@ -1,8 +1,10 @@
-import os
-import yaml
 import logging
+import os
 import re
-from typing import List, Dict, Optional, Any
+from typing import Any, Dict, List, Optional
+
+import yaml
+
 
 class SkillLoader:
     def __init__(self, skills_dir: str = "./agents/skills"):
@@ -24,8 +26,9 @@ class SkillLoader:
                     skill_data = self._parse_skill_file(skill_file)
                     if skill_data:
                         skill_data['path'] = skill_file
+                        logging.info(f"Skill carregada: {skill_data.get('name')}")
                         self.skills.append(skill_data)
-        
+
         logging.info(f"{len(self.skills)} Skills carregadas com sucesso.")
         return self.skills
 
@@ -34,13 +37,13 @@ class SkillLoader:
         try:
             with open(file_path, 'r', encoding='utf-8') as f:
                 content = f.read()
-                
+
                 # Regex para capturar conteúdo entre ---
                 match = re.search(r'^---\s*\n(.*?)\n---\s*\n', content, re.DOTALL | re.MULTILINE)
                 if match:
                     yaml_content = match.group(1)
                     metadata = yaml.safe_load(yaml_content)
-                    
+
                     # Conteúdo após o frontmatter
                     body = content[match.end():].strip()
                     metadata['full_instruction'] = body

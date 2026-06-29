@@ -1,15 +1,14 @@
-import pytest
-import asyncio
+import json
 import os
 import sys
-import json
-import re
-from unittest.mock import AsyncMock, MagicMock, patch
 from datetime import datetime
+from unittest.mock import patch
+
+import pytest
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.controller import AgentController, QATestContext, TesteEstado
+from core.controller import AgentController, QATestContext
 
 
 class TestDashboardGeneration:
@@ -90,7 +89,7 @@ tests/test_server.py ..F..F..                                          [100%]
             "exec_time": [10],
         }
         qa_data = {
-            "coverage": {"before": 42.0, "after": 63.0},
+            "coverage": {"before_pct": 42.0, "after_pct": 63.0},
             "tests": {"total_executed": 60, "failures": 0},
             "performance": {
                 "generation_time_seconds": 120,
@@ -114,8 +113,8 @@ tests/test_server.py ..F..F..                                          [100%]
         qa_data = {
             "metadata": {"run_id": "test-123", "timestamp": "2026-04-04"},
             "coverage": {
-                "before": 42.0,
-                "after": 63.0,
+                "before_pct": 42.0,
+                "after_pct": 63.0,
                 "delta_absolute": 21.0,
                 "delta_percentual": 50.0,
             },
@@ -147,6 +146,7 @@ tests/test_server.py ..F..F..                                          [100%]
     @pytest.mark.asyncio
     async def test_gerar_dashboard_full(self, controller, mock_contexto):
         import tempfile
+
         from core.config import settings
 
         with tempfile.TemporaryDirectory() as tmpdir:
@@ -169,11 +169,11 @@ tests/test_server.py ..F..F..                                          [100%]
                     assert os.path.exists(json_path), "JSON log should be created"
                     assert os.path.exists(html_path), "HTML dashboard should be created"
 
-                    with open(json_path, "r") as f:
+                    with open(json_path, "r", encoding="utf-8") as f:
                         data = json.load(f)
 
-                    assert data["coverage"]["before"] == 42.0
-                    assert data["coverage"]["after"] == 63.0
+                    assert data["coverage"]["before_pct"] == 42.0
+                    assert data["coverage"]["after_pct"] == 63.0
                     assert data["tests"]["total_executed"] == 10
                     assert data["tests"]["failures"] == 0
 

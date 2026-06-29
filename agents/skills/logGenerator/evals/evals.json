@@ -1,0 +1,17 @@
+{
+  "skill_name": "logGenerator",
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Inicie um teste unitário no repositório local 'flask'. Crie o arquivo log.md e registre o início da clonagem e da análise inicial.",
+      "expected_output": "O arquivo log.md deve ser criado em projects/flask/log.md com as seções de cabeçalho e os primeiros eventos registrados.",
+      "files": []
+    },
+    {
+      "id": 2,
+      "prompt": "Suponha que você já terminou de gerar 2 testes. Atualize o log.md existente no projeto 'flask' para incluir uma nova seção de 'Iteração 1' com um Thought e uma Action de execução de teste.",
+      "expected_output": "O arquivo log.md deve conter agora o conteúdo anterior + a nova seção da Iteração 1 anexada ao final.",
+      "files": ["projects/flask/log.md"]
+    }
+  ]
+}

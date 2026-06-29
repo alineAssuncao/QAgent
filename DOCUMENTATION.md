@@ -18,10 +18,56 @@
 8. [Guia de Setup para Novos Membros](#-8-guia-de-setup-para-novos-membros)
 9. [Estrutura de Diretórios](#-9-estrutura-de-diretórios)
 10. [Guia de Contribuição](#-10-guia-de-contribuição)
-11. [Roadmap e Visão de Futuro](#-11-roadmap-e-visão-de-futuro)
-12. [FAQ](#-12-faq)
+11. [Governança e Qualidade (Trava de Repositório)](#-11-governança-e-qualidade-trava-de-repositório)
+12. [Roadmap e Visão de Futuro](#-12-roadmap-e-visão-de-futuro)
+13. [FAQ](#-13-faq)
 
 ---
+
+## 🏗️ Visão Unificada: Negócio & Arquitetura
+
+O diagrama abaixo consolida a proposta de valor do QAgent com sua implementação técnica multicamadas.
+
+```mermaid
+graph TB
+    subgraph BUSINESS ["💼 CAMADA DE NEGÓCIO (Valor & ROI)"]
+        direction LR
+        B1["Redução de Custo QA"] --- B2["Privacidade Local"] --- B3["Visibilidade (KPIs)"]
+    end
+
+    subgraph AGENTS ["🧠 CAMADA COGNITIVA (Orquestração Multi-Agente)"]
+        direction TB
+        M["QA Maestro (Orquestrador)"] --> A["Analista (Mapeamento)"]
+        M --> C["Coder (Implementação)"]
+        M --> T["Tester (Validação)"]
+        M --> R["Reporter (Analytics)"]
+    end
+
+    subgraph ENGINE ["⚙️ CAMADA TÉCNICA (Execução & Inteligência)"]
+        direction TB
+        RE["Engine ReAct<br/>(Thought-Action-Obs)"]
+        SK["Skills (Plugins MD)<br/>(Hot-Reload)"]
+        TL["Tools (Python)<br/>(Git, Shell, FS)"]
+        PR["Provedores LLM<br/>(Gemini, DeepSeek, Local)"]
+    end
+
+    subgraph INFRA ["📦 CAMADA DE ENTREGA (Interfaces & Persistência)"]
+        direction TB
+        TG["Telegram Bot (Mobile/UI)"]
+        DB["Dashboard HTML (Viz)"]
+        SQ[("SQLite & Markdown (State)")]
+    end
+
+    %% Fluxos Principais
+    BUSINESS -.-> M
+    M <==> RE
+    RE <==> SK
+    RE <==> TL
+    RE <==> PR
+    R ==> DB
+    M <==> TG
+    TL ==> SQ
+```
 
 ## 🎯 1. Visão de Negócio
 
@@ -110,11 +156,16 @@ graph LR
 
 ### 5 Diferenças Fundamentais
 
-#### 1. 🔒 Privacidade por Design
-Nenhum concorrente oferece análise de código **completamente local**. O código-fonte nunca sai da máquina do usuário. Os LLMs recebem apenas prompts de contexto (trechos de código), nunca repositórios inteiros. Isso é um deal-breaker para empresas em setores regulados (financeiro, saúde, governo).
+#### 1. 🔒 Privacidade e Resiliência
+Nenhum concorrente oferece análise de código **completamente local** aliada a um sistema de **Checkpointing Dual**. Se a internet cair ou o token acabar, o progresso é salvo no SQLite e espelhado em Markdown. Isso permite que a automação continue de onde parou usando qualquer outro provedor disponível.
 
-#### 2. 🧠 Agente Autônomo vs. Ferramenta Passiva
-O QAgent não é uma ferramenta que "espera comandos". Ele é um **agente que pensa**:
+#### 2. 🧠 Orquestração Multi-Agente vs. Loop Monolítico
+O QAgent evoluiu para um modelo de delegacia:
+- **Manager**: Gerencia a fila de tarefas no banco de dados.
+- **Analista**: Mapeia o projeto e define o que precisa de teste.
+- **Coder**: Focado exclusivamente na escrita de código funcional.
+- **Tester**: Valida a execução e a cobertura.
+Esta separação reduz o "ruído" no contexto e aumenta dramaticamente a precisão da IA.
 
 ```
 Copilot:    Usuário digita → IA sugere código → Usuário aceita/rejeita
@@ -157,43 +208,34 @@ graph TB
         OUTPUT[TelegramOutputHandler<br>Texto • Áudio • Docs]
     end
 
-    subgraph "🧠 Core & Orquestração"
-        CTRL[AgentController<br>Facade Principal]
-        LOOP[AgentLoop<br>Engine ReAct]
-        TOOLS[ToolManager<br>Registry de Tools]
-        PROV[ProviderFactory<br>Multi-LLM]
+    subgraph "🧠 Core: Orquestração Multi-Agente"
+        CTRL[AgentController<br>Manager / Orquestrador]
+        LOOP[AgentLoop<br>Engine Worker ReAct]
+        PERS[Personas<br>Analyst, Coder, Tester]
+        PROV[ProviderFactory<br>Seleção por Tarefa]
     end
 
-    subgraph "🎯 Skills (Markdown Plugins)"
+    subgraph "🎯 Skills (Plugins especializados)"
         LOADER[SkillLoader<br>Hot-Reload]
-        MAESTRO[QA_Maestro<br>Orquestrador]
-        UNIT[UnitExpert]
-        INTEG[IntegrationExpert]
-        API[APITestExpert]
-        FRONT[FrontendTestExpert]
-        STATIC[StaticAnalyzer]
-        REPORT[ReportGenerator]
-        REFACT[RefactorGuide]
         CICD[CICDHelper]
-        DOC[TestDocWriter]
+        MAESTRO[QA_Maestro]
+        STATIC[StaticAnalyzer]
     end
 
-    subgraph "💾 Persistência"
-        MEM[MemoryManager]
+    subgraph "💾 Persistência e Checkpointing"
+        DB[(SQLite<br>project_subtasks)]
+        MD[Markdown<br>relatorio_testes_qagent.md]
         REPO[MessageRepository]
-        DB[(SQLite)]
     end
 
     API --> PROV
     INPUT --> CTRL
-    CTRL --> LOADER
-    LOADER --> MAESTRO
-    MAESTRO --> UNIT & INTEG & API & FRONT
+    CTRL --> DB & MD
+    CTRL --> PERS
     CTRL --> LOOP
-    LOOP <--> TOOLS
     LOOP <--> PROV
-    LOOP --> MEM --> REPO --> DB
     LOOP --> OUTPUT
+    MD --> REPO --> DB
 ```
 
 ### Padrões de Design Utilizados
@@ -700,7 +742,27 @@ A forma mais simples de contribuir é **criando novas skills**. Não requer alte
 
 ---
 
-## 🔮 11. Roadmap e Visão de Futuro
+## 🛡️ 11. Governança e Qualidade (Trava de Repositório)
+
+Para garantir a estabilidade do QAgent, o repositório utiliza **travas de segurança** e **automação de qualidade** (CI).
+
+### Regras de Ouro
+1.  **Main Protegida**: É proibido fazer `push` direto na branch `main`. Todo código deve entrar via Pull Request.
+2.  **Revisão Obrigatória**: Todo PR exige pelo menos uma aprovação de um dos donos do projeto (definidos em `.github/CODEOWNERS`).
+3.  **CI Obrigatório**: O botão de merge só é liberado se todos os testes e verificações de estilo passarem no GitHub Actions.
+
+### Fluxo de Trabalho (CI/CD)
+O repositório possui um workflow automatizado (`.github/workflows/ci.yml`) que executa:
+- **Linting (Ruff)**: Garante que o código segue os padrões de formatação.
+- **Testes (Pytest)**: Executa a suíte de testes unitários e de integração.
+- **Cobertura**: Gera relatórios de cobertura para garantir que novas funcionalidades foram testadas.
+
+### Como contribuir com segurança
+Ao abrir um PR, utilize o template padrão para descrever suas mudanças. O sistema de CI será ativado automaticamente. Se os testes falharem, corrija-os localmente antes de solicitar a revisão.
+
+---
+
+## 🔮 12. Roadmap e Visão de Futuro
 
 ### Curto Prazo (Q2 2026)
 - [ ] Testes end-to-end do próprio QAgent
@@ -728,7 +790,7 @@ A forma mais simples de contribuir é **criando novas skills**. Não requer alte
 
 ---
 
-## ❓ 12. FAQ
+## ❓ 13. FAQ
 
 ### Perguntas Técnicas
 
